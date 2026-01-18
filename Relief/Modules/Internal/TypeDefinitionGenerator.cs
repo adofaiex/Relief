@@ -164,14 +164,26 @@ namespace Relief.Modules.Internal
         private void GenerateType(Type type, string indent, string currentModule, string overrideName = null)
         {
             string typeName = overrideName ?? GetSafeTypeName(type);
+            var classGenericParams = new HashSet<string>();
+            if (type.IsGenericTypeDefinition)
+            {
+                foreach (var arg in type.GetGenericArguments()) classGenericParams.Add(arg.Name);
+            }
 
             if (type.BaseType == typeof(MulticastDelegate) || type.BaseType == typeof(Delegate))
             {
                 var invokeMethod = type.GetMethod("Invoke");
                 if (invokeMethod != null)
                 {
+                    string genericParams = "";
+                    if (type.IsGenericTypeDefinition)
+                    {
+                        var args = type.GetGenericArguments();
+                        genericParams = $"<{string.Join(", ", args.Select(a => a.Name))}>";
+                    }
+
                     var parameters = string.Join(", ", invokeMethod.GetParameters().Select((p, i) => $"{EscapeName(p.Name ?? $"arg{i}")}: {MapType(p.ParameterType, currentModule)}"));
-                    _sb.AppendLine($"{indent}export type {typeName} = ({parameters}) => {MapType(invokeMethod.ReturnType, currentModule)};");
+                    _sb.AppendLine($"{indent}export type {typeName}{genericParams} = ({parameters}) => {MapType(invokeMethod.ReturnType, currentModule)};");
                     return;
                 }
             }
@@ -211,21 +223,28 @@ namespace Relief.Modules.Internal
                 
                 var nestedTypes = type.GetNestedTypes(BindingFlags.Public);
                 var nestedNames = new HashSet<string>(nestedTypes.Select(t => GetSafeTypeName(t)));
+                var memberNames = new HashSet<string>();
 
                 // Fields
                 foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
                 {
-                    if (nestedNames.Contains(field.Name)) continue; // Skip if name conflicts with nested type
+                    if (nestedNames.Contains(field.Name)) continue; 
+                    if (!memberNames.Add(field.Name)) continue;
+
                     var isStatic = field.IsStatic ? "static " : "";
-                    _sb.AppendLine($"{indent}    {isStatic}{EscapeName(field.Name)}: {MapType(field.FieldType, currentModule)};");
+                    string fieldType = (field.IsStatic) ? MapTypeSafe(field.FieldType, currentModule, classGenericParams) : MapType(field.FieldType, currentModule);
+                    _sb.AppendLine($"{indent}    {isStatic}{EscapeName(field.Name)}: {fieldType};");
                 }
 
                 // Properties
                 foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
                 {
-                    if (nestedNames.Contains(prop.Name)) continue; // Skip if name conflicts with nested type
+                    if (nestedNames.Contains(prop.Name)) continue;
+                    if (!memberNames.Add(prop.Name)) continue;
+
                     var isStatic = prop.GetAccessors().Any(a => a.IsStatic) ? "static " : "";
-                    _sb.AppendLine($"{indent}    {isStatic}{EscapeName(prop.Name)}: {MapType(prop.PropertyType, currentModule)};");
+                    string propType = (isStatic == "static ") ? MapTypeSafe(prop.PropertyType, currentModule, classGenericParams) : MapType(prop.PropertyType, currentModule);
+                    _sb.AppendLine($"{indent}    {isStatic}{EscapeName(prop.Name)}: {propType};");
                 }
 
                 // Methods
@@ -236,12 +255,18 @@ namespace Relief.Modules.Internal
 
                 foreach (var group in methods)
                 {
-                    if (nestedNames.Contains(group.Key)) continue; // Skip if name conflicts with nested type
+                    if (nestedNames.Contains(group.Key)) continue;
+                    if (memberNames.Contains(group.Key)) continue; // Conflict with field/prop
+
                     foreach (var method in group)
                     {
                         var isStatic = method.IsStatic ? "static " : "";
-                        var parameters = string.Join(", ", method.GetParameters().Select((p, i) => $"{EscapeName(p.Name ?? $"arg{i}")}: {MapType(p.ParameterType, currentModule)}"));
-                        _sb.AppendLine($"{indent}    {isStatic}{EscapeName(method.Name)}({parameters}): {MapType(method.ReturnType, currentModule)};");
+                        var parameters = string.Join(", ", method.GetParameters().Select((p, i) => {
+                            string pType = (method.IsStatic) ? MapTypeSafe(p.ParameterType, currentModule, classGenericParams) : MapType(p.ParameterType, currentModule);
+                            return $"{EscapeName(p.Name ?? $"arg{i}")}: {pType}";
+                        }));
+                        string returnType = (method.IsStatic) ? MapTypeSafe(method.ReturnType, currentModule, classGenericParams) : MapType(method.ReturnType, currentModule);
+                        _sb.AppendLine($"{indent}    {isStatic}{EscapeName(method.Name)}({parameters}): {returnType};");
                     }
                 }
 
@@ -260,6 +285,20 @@ namespace Relief.Modules.Internal
                     _sb.AppendLine($"{indent}}}");
                 }
             }
+        }
+
+        private bool ContainsGenericParameter(Type type, HashSet<string> classGenericParams)
+        {
+            if (type.IsGenericParameter) return classGenericParams.Contains(type.Name);
+            if (type.IsArray) return ContainsGenericParameter(type.GetElementType(), classGenericParams);
+            if (type.IsGenericType) return type.GetGenericArguments().Any(a => ContainsGenericParameter(a, classGenericParams));
+            return false;
+        }
+
+        private string MapTypeSafe(Type type, string currentModule, HashSet<string> classGenericParams)
+        {
+            if (ContainsGenericParameter(type, classGenericParams)) return "any";
+            return MapType(type, currentModule);
         }
 
         private string EscapeName(string name)
@@ -335,12 +374,19 @@ namespace Relief.Modules.Internal
 
                 string result = (mod == currentModule) ? typeName : $"{GetModuleAlias(mod)}.{typeName}";
 
-                if (type.IsGenericType && !type.IsGenericTypeDefinition)
+                if (lookupType.IsGenericType)
                 {
-                    var args = type.GetGenericArguments();
-                    if (args.Length > 0)
+                    if (type.IsGenericType && !type.IsGenericTypeDefinition)
                     {
+                        var args = type.GetGenericArguments();
                         var argNames = string.Join(", ", args.Select(a => MapType(a, currentModule)));
+                        return $"{result}<{argNames}>";
+                    }
+                    else
+                    {
+                        // If it's a generic definition or used without args, provide 'any' for all args
+                        var args = lookupType.GetGenericArguments();
+                        var argNames = string.Join(", ", args.Select(_ => "any"));
                         return $"{result}<{argNames}>";
                     }
                 }
