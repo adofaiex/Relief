@@ -114,31 +114,45 @@ namespace Relief.Modules.Internal
         private HashSet<string> GetDependencies(List<Type> types)
         {
             var deps = new HashSet<string>();
+            var visited = new HashSet<Type>();
             foreach (var type in types)
             {
-                // Check base type and interfaces
-                if (type.BaseType != null) AddTypeDependency(type.BaseType, deps);
-                foreach (var iface in type.GetInterfaces()) AddTypeDependency(iface, deps);
-
-                // Check properties, fields, methods for types in other modules
-                foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
-                {
-                    AddTypeDependency(prop.PropertyType, deps);
-                }
-                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
-                {
-                    AddTypeDependency(field.FieldType, deps);
-                }
-                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
-                {
-                    AddTypeDependency(method.ReturnType, deps);
-                    foreach (var p in method.GetParameters())
-                    {
-                        AddTypeDependency(p.ParameterType, deps);
-                    }
-                }
+                CollectDependencies(type, deps, visited);
             }
             return deps;
+        }
+
+        private void CollectDependencies(Type type, HashSet<string> deps, HashSet<Type> visited)
+        {
+            if (type == null || !visited.Add(type)) return;
+
+            // Check base type and interfaces
+            if (type.BaseType != null) AddTypeDependency(type.BaseType, deps);
+            foreach (var iface in type.GetInterfaces()) AddTypeDependency(iface, deps);
+
+            // Check properties, fields, methods for types in other modules
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            {
+                AddTypeDependency(prop.PropertyType, deps);
+            }
+            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            {
+                AddTypeDependency(field.FieldType, deps);
+            }
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            {
+                AddTypeDependency(method.ReturnType, deps);
+                foreach (var p in method.GetParameters())
+                {
+                    AddTypeDependency(p.ParameterType, deps);
+                }
+            }
+
+            // Recursively check nested types
+            foreach (var nested in type.GetNestedTypes(BindingFlags.Public))
+            {
+                CollectDependencies(nested, deps, visited);
+            }
         }
 
         private void AddTypeDependency(Type t, HashSet<string> deps)
@@ -232,6 +246,13 @@ namespace Relief.Modules.Internal
                     if (!memberNames.Add(field.Name)) continue;
 
                     var isStatic = field.IsStatic ? "static " : "";
+                    if (field.IsStatic && HasBaseStaticMember(type, field.Name))
+                    {
+                        // Conflict with base static member - make it any to avoid TS2417
+                        _sb.AppendLine($"{indent}    static {EscapeName(field.Name)}: any;");
+                        continue;
+                    }
+
                     string fieldType = (field.IsStatic) ? MapTypeSafe(field.FieldType, currentModule, classGenericParams) : MapType(field.FieldType, currentModule);
                     _sb.AppendLine($"{indent}    {isStatic}{EscapeName(field.Name)}: {fieldType};");
                 }
@@ -243,6 +264,13 @@ namespace Relief.Modules.Internal
                     if (!memberNames.Add(prop.Name)) continue;
 
                     var isStatic = prop.GetAccessors().Any(a => a.IsStatic) ? "static " : "";
+                    if (isStatic == "static " && HasBaseStaticMember(type, prop.Name))
+                    {
+                        // Conflict with base static member - make it any to avoid TS2417
+                        _sb.AppendLine($"{indent}    static {EscapeName(prop.Name)}: any;");
+                        continue;
+                    }
+
                     string propType = (isStatic == "static ") ? MapTypeSafe(prop.PropertyType, currentModule, classGenericParams) : MapType(prop.PropertyType, currentModule);
                     _sb.AppendLine($"{indent}    {isStatic}{EscapeName(prop.Name)}: {propType};");
                 }
@@ -261,12 +289,20 @@ namespace Relief.Modules.Internal
                     foreach (var method in group)
                     {
                         var isStatic = method.IsStatic ? "static " : "";
-                        var parameters = string.Join(", ", method.GetParameters().Select((p, i) => {
+                        if (method.IsStatic && HasBaseStaticMember(type, method.Name))
+                        {
+                            // Conflict with base static member - make all parameters optional and return any to avoid TS2417
+                            var parameters = string.Join(", ", method.GetParameters().Select((p, i) => $"{EscapeName(p.Name ?? $"arg{i}")}?: any"));
+                            _sb.AppendLine($"{indent}    static {EscapeName(method.Name)}({parameters}): any;");
+                            continue;
+                        }
+
+                        var parametersStr = string.Join(", ", method.GetParameters().Select((p, i) => {
                             string pType = (method.IsStatic) ? MapTypeSafe(p.ParameterType, currentModule, classGenericParams) : MapType(p.ParameterType, currentModule);
                             return $"{EscapeName(p.Name ?? $"arg{i}")}: {pType}";
                         }));
                         string returnType = (method.IsStatic) ? MapTypeSafe(method.ReturnType, currentModule, classGenericParams) : MapType(method.ReturnType, currentModule);
-                        _sb.AppendLine($"{indent}    {isStatic}{EscapeName(method.Name)}({parameters}): {returnType};");
+                        _sb.AppendLine($"{indent}    {isStatic}{EscapeName(method.Name)}({parametersStr}): {returnType};");
                     }
                 }
 
@@ -285,6 +321,17 @@ namespace Relief.Modules.Internal
                     _sb.AppendLine($"{indent}}}");
                 }
             }
+        }
+
+        private bool HasBaseStaticMember(Type type, string name)
+        {
+            var b = type.BaseType;
+            while (b != null && b != typeof(object))
+            {
+                if (b.GetMember(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Any()) return true;
+                b = b.BaseType;
+            }
+            return false;
         }
 
         private bool ContainsGenericParameter(Type type, HashSet<string> classGenericParams)
