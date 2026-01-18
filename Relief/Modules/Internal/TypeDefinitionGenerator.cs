@@ -31,11 +31,7 @@ namespace Relief.Modules.Internal
                 if (!_modules.ContainsKey(moduleName)) _modules[moduleName] = new List<Type>();
                 foreach (var t in types)
                 {
-                    if (!_typeToModule.ContainsKey(t))
-                    {
-                        _typeToModule[t] = moduleName;
-                        _modules[moduleName].Add(t);
-                    }
+                    AddTypeAndNested(t, moduleName);
                 }
             }
             catch (Exception)
@@ -47,17 +43,30 @@ namespace Relief.Modules.Internal
                     if (!_modules.ContainsKey(moduleName)) _modules[moduleName] = new List<Type>();
                     foreach (var t in types)
                     {
-                        if (!_typeToModule.ContainsKey(t))
-                        {
-                            _typeToModule[t] = moduleName;
-                            _modules[moduleName].Add(t);
-                        }
+                        AddTypeAndNested(t, moduleName);
                     }
                 }
                 catch
                 {
                     // Ignore if completely fails
                 }
+            }
+        }
+
+        private void AddTypeAndNested(Type t, string moduleName)
+        {
+            if (!_typeToModule.ContainsKey(t))
+            {
+                _typeToModule[t] = moduleName;
+                if (!t.IsNested)
+                {
+                    _modules[moduleName].Add(t);
+                }
+            }
+
+            foreach (var nested in t.GetNestedTypes(BindingFlags.Public))
+            {
+                AddTypeAndNested(nested, moduleName);
             }
         }
 
@@ -245,16 +254,24 @@ namespace Relief.Modules.Internal
                     if (nestedNames.Contains(field.Name)) continue; 
                     if (!memberNames.Add(field.Name)) continue;
 
-                    var isStatic = field.IsStatic ? "static " : "";
-                    if (field.IsStatic && HasBaseStaticMember(type, field.Name))
+                    bool isStatic = field.IsStatic && !type.IsInterface;
+                    var staticPrefix = isStatic ? "static " : "";
+                    
+                    if (isStatic && HasBaseStaticMember(type, field.Name))
                     {
-                        // Conflict with base static member - make it any to avoid TS2417
                         _sb.AppendLine($"{indent}    static {EscapeName(field.Name)}: any;");
                         continue;
                     }
 
-                    string fieldType = (field.IsStatic) ? MapTypeSafe(field.FieldType, currentModule, classGenericParams) : MapType(field.FieldType, currentModule);
-                    _sb.AppendLine($"{indent}    {isStatic}{EscapeName(field.Name)}: {fieldType};");
+                    if (!isStatic && HasBaseInstanceMember(type, field.Name))
+                    {
+                        // Potential TS2416: incompatible override
+                        _sb.AppendLine($"{indent}    {EscapeName(field.Name)}: any;");
+                        continue;
+                    }
+
+                    string fieldType = (isStatic) ? MapTypeSafe(field.FieldType, currentModule, classGenericParams) : MapType(field.FieldType, currentModule);
+                    _sb.AppendLine($"{indent}    {staticPrefix}{EscapeName(field.Name)}: {fieldType};");
                 }
 
                 // Properties
@@ -263,16 +280,24 @@ namespace Relief.Modules.Internal
                     if (nestedNames.Contains(prop.Name)) continue;
                     if (!memberNames.Add(prop.Name)) continue;
 
-                    var isStatic = prop.GetAccessors().Any(a => a.IsStatic) ? "static " : "";
-                    if (isStatic == "static " && HasBaseStaticMember(type, prop.Name))
+                    bool isStatic = prop.GetAccessors().Any(a => a.IsStatic) && !type.IsInterface;
+                    var staticPrefix = isStatic ? "static " : "";
+
+                    if (isStatic && HasBaseStaticMember(type, prop.Name))
                     {
-                        // Conflict with base static member - make it any to avoid TS2417
                         _sb.AppendLine($"{indent}    static {EscapeName(prop.Name)}: any;");
                         continue;
                     }
 
-                    string propType = (isStatic == "static ") ? MapTypeSafe(prop.PropertyType, currentModule, classGenericParams) : MapType(prop.PropertyType, currentModule);
-                    _sb.AppendLine($"{indent}    {isStatic}{EscapeName(prop.Name)}: {propType};");
+                    if (!isStatic && HasBaseInstanceMember(type, prop.Name))
+                    {
+                        // Potential TS2416: incompatible override
+                        _sb.AppendLine($"{indent}    {EscapeName(prop.Name)}: any;");
+                        continue;
+                    }
+
+                    string propType = (isStatic) ? MapTypeSafe(prop.PropertyType, currentModule, classGenericParams) : MapType(prop.PropertyType, currentModule);
+                    _sb.AppendLine($"{indent}    {staticPrefix}{EscapeName(prop.Name)}: {propType};");
                 }
 
                 // Methods
@@ -288,21 +313,30 @@ namespace Relief.Modules.Internal
 
                     foreach (var method in group)
                     {
-                        var isStatic = method.IsStatic ? "static " : "";
-                        if (method.IsStatic && HasBaseStaticMember(type, method.Name))
+                        bool isStatic = method.IsStatic && !type.IsInterface;
+                        var staticPrefix = isStatic ? "static " : "";
+
+                        if (isStatic && HasBaseStaticMember(type, method.Name))
                         {
-                            // Conflict with base static member - make all parameters optional and return any to avoid TS2417
                             var parameters = string.Join(", ", method.GetParameters().Select((p, i) => $"{EscapeName(p.Name ?? $"arg{i}")}?: any"));
                             _sb.AppendLine($"{indent}    static {EscapeName(method.Name)}({parameters}): any;");
                             continue;
                         }
 
+                        if (!isStatic && HasBaseInstanceMember(type, method.Name))
+                        {
+                            // Potential TS2416: incompatible override
+                            var parameters = string.Join(", ", method.GetParameters().Select((p, i) => $"{EscapeName(p.Name ?? $"arg{i}")}?: any"));
+                            _sb.AppendLine($"{indent}    {EscapeName(method.Name)}({parameters}): any;");
+                            continue;
+                        }
+
                         var parametersStr = string.Join(", ", method.GetParameters().Select((p, i) => {
-                            string pType = (method.IsStatic) ? MapTypeSafe(p.ParameterType, currentModule, classGenericParams) : MapType(p.ParameterType, currentModule);
+                            string pType = (isStatic) ? MapTypeSafe(p.ParameterType, currentModule, classGenericParams) : MapType(p.ParameterType, currentModule);
                             return $"{EscapeName(p.Name ?? $"arg{i}")}: {pType}";
                         }));
-                        string returnType = (method.IsStatic) ? MapTypeSafe(method.ReturnType, currentModule, classGenericParams) : MapType(method.ReturnType, currentModule);
-                        _sb.AppendLine($"{indent}    {isStatic}{EscapeName(method.Name)}({parametersStr}): {returnType};");
+                        string returnType = (isStatic) ? MapTypeSafe(method.ReturnType, currentModule, classGenericParams) : MapType(method.ReturnType, currentModule);
+                        _sb.AppendLine($"{indent}    {staticPrefix}{EscapeName(method.Name)}({parametersStr}): {returnType};");
                     }
                 }
 
@@ -314,9 +348,8 @@ namespace Relief.Modules.Internal
                     _sb.AppendLine($"{indent}export namespace {typeName} {{");
                     foreach (var nestedType in nestedTypes)
                     {
-                        string nestedName = GetSafeTypeName(nestedType);
-                        if (nestedType.IsGenericType) nestedName += "_" + nestedType.GetGenericArguments().Length;
-                        GenerateType(nestedType, indent + "    ", currentModule, nestedName);
+                        string nestedLeafName = GetSafeTypeNameLeaf(nestedType);
+                        GenerateType(nestedType, indent + "    ", currentModule, nestedLeafName);
                     }
                     _sb.AppendLine($"{indent}}}");
                 }
@@ -329,6 +362,17 @@ namespace Relief.Modules.Internal
             while (b != null && b != typeof(object))
             {
                 if (b.GetMember(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Any()) return true;
+                b = b.BaseType;
+            }
+            return false;
+        }
+
+        private bool HasBaseInstanceMember(Type type, string name)
+        {
+            var b = type.BaseType;
+            while (b != null && b != typeof(object))
+            {
+                if (b.GetMember(name, BindingFlags.Public | BindingFlags.Instance).Any()) return true;
                 b = b.BaseType;
             }
             return false;
@@ -354,18 +398,26 @@ namespace Relief.Modules.Internal
             return name;
         }
 
-        private string GetSafeTypeName(Type type)
+        private string GetSafeTypeNameLeaf(Type type)
         {
             string name = type.Name;
             if (type.IsGenericType)
             {
                 name = type.Name.Split('`')[0];
-                var genericArgs = type.GetGenericArguments();
-                // If there are other types with the same name but different generic arity, 
-                // we might need to append the count to avoid TS collision
-                // But for now, let's just use the name and handle collisions in Generate
+                name += "_" + type.GetGenericArguments().Length;
             }
             return name.Replace("<", "_").Replace(">", "_").Replace("$", "_").Replace("`", "_");
+        }
+
+        private string GetSafeTypeName(Type type)
+        {
+            string name = GetSafeTypeNameLeaf(type);
+
+            if (type.IsNested && !type.IsGenericParameter)
+            {
+                return GetSafeTypeName(type.DeclaringType) + "." + name;
+            }
+            return name;
         }
 
         private string MapType(Type type, string currentModule)
@@ -414,11 +466,6 @@ namespace Relief.Modules.Internal
             if (_typeToModule.TryGetValue(lookupType, out var mod))
             {
                 string typeName = GetSafeTypeName(lookupType);
-                if (lookupType.IsGenericType)
-                {
-                    typeName += "_" + lookupType.GetGenericArguments().Length;
-                }
-
                 string result = (mod == currentModule) ? typeName : $"{GetModuleAlias(mod)}.{typeName}";
 
                 if (lookupType.IsGenericType)
