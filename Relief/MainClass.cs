@@ -107,6 +107,7 @@ namespace Relief
             }
             
             GenerateReactTypings(TypingsDir);
+            GenerateBuiltinTypings(TypingsDir);
 
             try
             {
@@ -151,6 +152,55 @@ namespace Relief
             catch (Exception ex)
             {
                 Logger.LogException(ex);
+            }
+        }
+
+        private static void GenerateBuiltinTypings(string typingsDir)
+        {
+            string builtinPath = Path.Combine(typingsDir, "builtin.d.ts");
+            if (!File.Exists(builtinPath))
+            {
+                string builtinContent = @"declare module 'fs' {
+    export function readFileSync(path: string, encoding?: string): string;
+    export function writeFileSync(path: string, data: string, encoding?: string): void;
+    export function existsSync(path: string): boolean;
+    export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
+    export function readdirSync(path: string): string[];
+    export function unlinkSync(path: string): void;
+    export function rmdirSync(path: string): void;
+}
+
+declare module 'path' {
+    export function join(...parts: string[]): string;
+    export function resolve(...parts: string[]): string;
+    export function basename(path: string): string;
+    export function dirname(path: string): string;
+    export function extname(path: string): string;
+    export function isAbsolute(path: string): boolean;
+}
+
+declare module 'process' {
+    export function cwd(): string;
+    export function uptime(): number;
+}
+
+declare module 'eventHandler' {
+    export function registerEvent(name: string, callback: (...args: any[]) => void): any;
+    export function unregisterEvent(name: string): void;
+    export function triggerEvent(name: string, ...args: any[]): void;
+}
+
+declare module 'uitext' {
+    export const instance: {
+        setText(text: string): void;
+        setPosition(x: number, y: number): void;
+        setSize(size: number): void;
+        setAlignment(align: number): void;
+        setFontStyle(style: number): void;
+        setShadowEnabled(enabled: boolean): void;
+    };
+}";
+                File.WriteAllText(builtinPath, builtinContent);
             }
         }
 

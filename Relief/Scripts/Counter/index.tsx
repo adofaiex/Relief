@@ -1,6 +1,7 @@
 /// <reference path="../../Typings/unity-engine.d.ts" />
 /// <reference path="../../Typings/react.d.ts" />
 /// <reference path="../../Typings/react-jsx-runtime.d.ts" />
+/// <reference path="../../Typings/builtin.d.ts" />
 
 import { MonoBehaviour } from 'unity-engine'
 import { LoaderA } from './umm.tsx'
