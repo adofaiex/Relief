@@ -27,13 +27,19 @@ namespace Relief.Modules
             {
                 var exportedTypes = GetSafeExportedTypes(assembly);
                 var namespaces = exportedTypes
-                    .Where(t => !string.IsNullOrEmpty(t.Namespace))
                     .Select(t => t.Namespace)
                     .Distinct();
 
                 foreach (var ns in namespaces)
                 {
                     string moduleName = GetModuleNameFromNamespace(ns);
+                    if (moduleName == null && string.IsNullOrEmpty(ns))
+                    {
+                        // Use assembly name for types without namespace (e.g. Assembly-CSharp)
+                        string asmName = assembly.GetName().Name;
+                        moduleName = asmName.ToLower().Replace(".", "-");
+                    }
+
                     if (moduleName != null)
                     {
                         if (!moduleDefinitions.ContainsKey(moduleName))
@@ -203,13 +209,19 @@ namespace Relief.Modules
             {
                 var exportedTypes = GetSafeExportedTypes(assembly);
                 var typesByNamespace = exportedTypes
-                    .Where(t => !string.IsNullOrEmpty(t.Namespace))
                     .GroupBy(t => t.Namespace);
 
                 foreach (var group in typesByNamespace)
                 {
                     var ns = group.Key;
                     string moduleName = GetModuleNameFromNamespace(ns);
+
+                    if (moduleName == null && string.IsNullOrEmpty(ns))
+                    {
+                        // Use assembly name for types without namespace
+                        string asmName = assembly.GetName().Name;
+                        moduleName = asmName.ToLower().Replace(".", "-");
+                    }
 
                     if (moduleName != null)
                     {
