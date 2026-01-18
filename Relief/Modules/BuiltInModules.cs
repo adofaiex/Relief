@@ -4,8 +4,12 @@ using Jint;
 using Jint.Native;
 using Relief.Modules;
 using UnityEngine;
+using UnityEngine.UI;
+using Jint.Native.Object;
+using Jint.Native.Function;
+using Jint.Runtime.Interop;
 
-namespace Relief
+namespace Relief.Modules.BuiltInModules
 {
     /// <summary>
     /// </summary>
@@ -25,8 +29,8 @@ namespace Relief
             engine.Modules.Add("eventHandler", builder => {
                 builder.ExportFunction("registerEvent", args => {
                     var name = args[0].AsString();
-                    var del = args[1].ToObject();
-                    return JsValue.FromObject(engine, eventSystem.RegisterEvent(name, del as Delegate));
+                    var cb = args[1];
+                    return JsValue.FromObject(engine, eventSystem.RegisterEvent(name, cb));
                 });
                 builder.ExportFunction("unregisterEvent", args => {
                     var name = args[0].AsString();
@@ -61,10 +65,81 @@ namespace Relief
                 });
             });
 
-            // React Modules
-            engine.Modules.Add("react", Properties.Resources.react);
-            engine.Modules.Add("react-unity", Properties.Resources.react_unity);
-            engine.Modules.Add("@react-components/unity", Properties.Resources.reactComponents);
+            // JSX Runtime implementation
+            var unityBridge = new UnityBridge(engine);
+            
+            JsValue JsxFactory(JsValue[] args)
+            {
+                var type = args[0].AsString();
+                var props = args[1].AsObject();
+                
+                var go = unityBridge.CreateGameObject(type);
+                var unityGo = go.GameObject;
+
+                // Apply props
+                foreach (var prop in props.GetOwnProperties())
+                {
+                    var key = prop.Key.ToString();
+                    var value = prop.Value.Value;
+                    
+                    if (key == "children")
+                    {
+                        void ProcessChild(JsValue child)
+                        {
+                            if (child.IsObject())
+                            {
+                                var childObj = child.AsObject();
+                                var raw = childObj.ToObject();
+                                if (raw is ReliefGameObject childGo)
+                                {
+                                    childGo.GameObject.transform.SetParent(unityGo.transform, false);
+                                }
+                                else if (childObj.HasProperty("GameObject")) // 兼容性处理
+                                {
+                                    var innerGo = childObj.Get("GameObject").ToObject() as GameObject;
+                                    if (innerGo != null) innerGo.transform.SetParent(unityGo.transform, false);
+                                }
+                            }
+                        }
+
+                        if (value.IsArray())
+                        {
+                            var arr = value.AsArray();
+                            for (int i = 0; i < (int)arr.Length; i++) ProcessChild(arr.Get(i.ToString()));
+                        }
+                        else ProcessChild(value);
+                    }
+                    else if (key == "components" && value.IsArray())
+                    {
+                        var arr = value.AsArray();
+                        for (int i = 0; i < (int)arr.Length; i++)
+                        {
+                            go.AddComponentJ(arr.Get(i.ToString()));
+                        }
+                    }
+                    else if (key == "dontDestoryOnLoad" && value.AsBoolean())
+                    {
+                        UnityEngine.Object.DontDestroyOnLoad(unityGo);
+                    }
+                    else
+                    {
+                        unityBridge.SetGameObjectProperty(unityGo.name, key, value);
+                    }
+                }
+
+                return JsValue.FromObject(engine, go);
+            }
+
+            engine.Modules.Add("react/jsx-runtime", builder =>
+            {
+                builder.ExportFunction("jsx", JsxFactory);
+                builder.ExportFunction("jsxs", JsxFactory);
+            });
+
+            engine.Modules.Add("react", builder =>
+            {
+                builder.ExportObject("createElement", JsValue.Undefined); // Minimal react shim
+            });
         }
 
     }

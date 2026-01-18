@@ -1,4 +1,4 @@
-﻿using Jint;
+using Jint;
 using Jint.Native;
 using Jint.Runtime.Modules;
 using System;
@@ -30,6 +30,10 @@ namespace Relief
 
         public ResolvedSpecifier Resolve(string referencingModuleLocation, ModuleRequest moduleRequest)
         {
+            if (_nativeLoader == null)
+            {
+                return new ResolvedSpecifier(moduleRequest, moduleRequest.Specifier, new Uri("file:///" + Path.Combine(_baseDirectory, moduleRequest.Specifier).Replace("\\", "/")), SpecifierType.RelativeOrAbsolute);
+            }
             // 优先使用原生加载器进行解析
             return _nativeLoader.Resolve(referencingModuleLocation, moduleRequest);
         }
@@ -40,6 +44,10 @@ namespace Relief
             {
                 // 获取文件路径并标准化
                 var filePath = GetNormalizedPath(resolved);
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    return _nativeLoader.LoadModule(engine, resolved);
+                }
 
                 // 检查是否是需要转换的文件类型
                 var extension = Path.GetExtension(filePath).ToLower();
@@ -59,7 +67,7 @@ namespace Relief
             catch (Exception ex)
             {
                 _logger?.LogException(ex);
-                throw new InvalidOperationException($"Failed to load module {resolved.Uri}: {ex.Message}", ex);
+                throw new InvalidOperationException($"Failed to load module {resolved.Specifier}: {ex.Message}", ex);
             }
         }
 
@@ -82,7 +90,7 @@ namespace Relief
                 var presets = @"({
                     target: 'ES6',
                     module: 'ES6',
-                    jsx: 'react',
+                    jsx: 'react-jsx',
                     allowJs: true,
                     esModuleInterop: true,
                     moduleResolution: 'bundler',

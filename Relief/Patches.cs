@@ -30,20 +30,7 @@ namespace Relief
             }
         }
 
-        [HarmonyPatch(typeof(ADOBase), nameof(ADOBase.LoadScene))]
-        private static class ScenePatch
-        {
-
-            private static void Prefix(string scene)
-            {
-                MainClass.eventSystem.TriggerEvent("scenePreload", new Dictionary<string, object> { { "name", scene } });
-            }
-
-            private static void Postfix(string scene)
-            {
-                MainClass.eventSystem.TriggerEvent("sceneLoaded", new Dictionary<string, object> { { "name", scene } });
-            }
-        }
+        
 
         // 监听同步加载场景
         [HarmonyPatch]
@@ -84,7 +71,7 @@ namespace Relief
 
             static void Prefix(string sceneName, LoadSceneMode mode)
             {
-                MainClass.eventSystem.TriggerEvent("scenePreload", sceneName, mode.ToString());
+                MainClass.eventSystem.TriggerEvent("scenePreload", new Dictionary<string, object> { { "name", sceneName }, { "mode", mode } });
             }
 
             static void Postfix(string sceneName, LoadSceneMode mode, ref AsyncOperation __result)
@@ -94,7 +81,7 @@ namespace Relief
                 {
                     __result.completed += (op) =>
                     {
-                        MainClass.eventSystem.TriggerEvent("sceneLoaded", sceneName, mode.ToString());
+                        MainClass.eventSystem.TriggerEvent("sceneLoaded", new Dictionary<string, object> { { "name", sceneName }, { "mode", mode } });
                     };
                 }
             }

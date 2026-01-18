@@ -1,0 +1,9 @@
+{
+  "Name": "Counter Sample",
+  "Id": "counter",
+  "Authors": ["Relief"],
+  "EntryPoint": "index.tsx",
+  "Version": "0.0.1",
+  "Description": "React-Unity 计数器示例，展示 Canvas 与 TextMeshPro 以及 SRP 风格背景",
+  "Inject": "Loaded"
+}

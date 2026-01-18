@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Jint;
@@ -18,6 +18,7 @@ namespace Relief
         private readonly UnityBridge _unityBridge;
         private readonly Dictionary<string, VNode> _vnodeCache = new Dictionary<string, VNode>();
         private readonly Dictionary<string, GameObject> _gameObjectMap = new Dictionary<string, GameObject>();
+        private readonly Dictionary<GameObject, string> _objectIdMap = new Dictionary<GameObject, string>();
 
         public VirtualDOM(Engine engine, UnityBridge unityBridge)
         {
@@ -312,9 +313,10 @@ namespace Relief
                     // 处理组件挂载 - 使用GameObject包装组件实例
                     Debug.Log($"Mounting component: {vnode.Type}");
 
-                    // 创建组件对应的GameObject作为包装容器
                     nodeGameObject = new GameObject($"Component: {vnode.Type}");
                     nodeGameObject.transform.SetParent(container.transform, false);
+                    var compId = _unityBridge.RegisterGameObject(nodeGameObject);
+                    _objectIdMap[nodeGameObject] = compId;
 
                     // 将创建的GameObject赋值给ComponentInstance属性
                     vnode.ComponentInstance = nodeGameObject;
@@ -328,12 +330,14 @@ namespace Relief
                     if (!string.IsNullOrEmpty(vnode.GameObjectId))
                     {
                         nodeGameObject = _unityBridge.GetGameObject(vnode.GameObjectId);
+                        if (nodeGameObject != null) _objectIdMap[nodeGameObject] = vnode.GameObjectId;
                     }
                     else
                     {
-                        var gameObjectId = _unityBridge.CreateGameObject(vnode.Type);
-                        nodeGameObject = _unityBridge.GetGameObject(gameObjectId);
-                        vnode.GameObjectId = gameObjectId;
+                        var reliefGo = _unityBridge.CreateGameObject(vnode.Type);
+                        nodeGameObject = reliefGo.GameObject;
+                        vnode.GameObjectId = _unityBridge.RegisterGameObject(nodeGameObject);
+                        if (nodeGameObject != null) _objectIdMap[nodeGameObject] = vnode.GameObjectId;
                     }
 
                     if (nodeGameObject != null)
@@ -487,7 +491,14 @@ namespace Relief
             {
                 try
                 {
-                    _unityBridge.SetGameObjectProperty(gameObject.name, prop.Key, prop.Value);
+                    if (_objectIdMap.TryGetValue(gameObject, out var id))
+                    {
+                        _unityBridge.SetGameObjectProperty(id, prop.Key, prop.Value);
+                    }
+                    else
+                    {
+                        _unityBridge.SetGameObjectProperty(gameObject.name, prop.Key, prop.Value);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -506,7 +517,14 @@ namespace Relief
             {
                 if (!newProps.ContainsKey(oldProp.Key))
                 {
-                    _unityBridge.SetGameObjectProperty(gameObject.name, oldProp.Key, JsValue.Null);
+                    if (_objectIdMap.TryGetValue(gameObject, out var idRemove))
+                    {
+                        _unityBridge.SetGameObjectProperty(idRemove, oldProp.Key, JsValue.Null);
+                    }
+                    else
+                    {
+                        _unityBridge.SetGameObjectProperty(gameObject.name, oldProp.Key, JsValue.Null);
+                    }
                 }
             }
 
@@ -516,7 +534,14 @@ namespace Relief
                 if (!oldProps.ContainsKey(newProp.Key) ||
                     !AreSameValue(oldProps[newProp.Key], newProp.Value))
                 {
-                    _unityBridge.SetGameObjectProperty(gameObject.name, newProp.Key, newProp.Value);
+                    if (_objectIdMap.TryGetValue(gameObject, out var idSet))
+                    {
+                        _unityBridge.SetGameObjectProperty(idSet, newProp.Key, newProp.Value);
+                    }
+                    else
+                    {
+                        _unityBridge.SetGameObjectProperty(gameObject.name, newProp.Key, newProp.Value);
+                    }
                 }
             }
         }

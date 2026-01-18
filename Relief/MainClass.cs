@@ -3,53 +3,26 @@ using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using UnityModManagerNet;
-using System.Runtime;
 using System.IO;
 using Jint;
-using Jint.Native;
-using System.Xml.Linq;
-using TinyJson;
-using Jint.Native.Object;
-using Jint.Native.Function;
-using Jint.Runtime;
 using Jint.Runtime.Modules;
-using static UnityModManagerNet.UnityModManager;
-using Jint.Native.Array;
-using System.Linq;
-using System.Collections;
-using UnityEngine.EventSystems;
-using Jint.Runtime.Interop;
 using System.Threading;
-using Relief.Modules.vm;
-using TMPro;
+using Relief.Modules;
 using Relief.Modules.BuiltInModules;
 
-// TODO: Rename this namespace to your mod's name.
 namespace Relief
 {
-    /// <summary>
-    /// The main class for the mod. Call other parts of your code from this
-    /// class.
-    /// </summary>
     public static class MainClass
     {
-        /// <summary>
-        /// Whether the mod is enabled. This is useful to have as a global
-        /// property in case other parts of your mod's code needs to see if the
-        /// mod is enabled.
-        /// </summary>
         public static bool IsEnabled { get; private set; }
         public static Engine engine { get; private set; }
-
         public static Engine transformEngine { get; private set; }
-
         public static TypeScriptModuleLoader typeScriptLoader { get; private set; }
-
-        static Thread Mainthread;
-
         public static EventSystem eventSystem { get; private set; }
-
         public static JsConsole jsConsole { get; private set; }
+        
+        static Thread scriptThread;
+
         public static string AssemblyDirectory
         {
             get
@@ -60,256 +33,124 @@ namespace Relief
                 return Path.GetDirectoryName(path);
             }
         }
-        public static string ScriptDir
+
+        public static string ScriptDir => Path.Combine(AssemblyDirectory, "Scripts");
+        public static string DllDir => Path.GetDirectoryName(typeof(MonoBehaviour).Assembly.Location);
+        public static string TypingsDir => Path.Combine(AssemblyDirectory, "Typings");
+
+        public static readonly string[] DllNames = new string[]
         {
-            get
-            {
-                return Path.Combine(AssemblyDirectory, "Scripts");
-            }
-        }
+            "Unity.AI.Navigation.dll", "Unity.Addressables.dll", "Unity.MemoryProfiler.dll", "Unity.ResourceManager.dll",
+            "Unity.ScriptableBuildPipeline.dll", "Unity.Services.Core.Analytics.dll", "Unity.Services.Core.Configuration.dll",
+            "Unity.Services.Core.Device.dll", "Unity.Services.Core.Environments.Internal.dll", "Unity.Services.Core.Environments.dll",
+            "Unity.Services.Core.Internal.dll", "Unity.Services.Core.Networking.dll", "Unity.Services.Core.Registration.dll",
+            "Unity.Services.Core.Scheduler.dll", "Unity.Services.Core.Telemetry.dll", "Unity.Services.Core.Threading.dll",
+            "Unity.Services.Core.dll", "Unity.TextMeshPro.dll", "Unity.Timeline.dll", "UnityEngine.AIModule.dll",
+            "UnityEngine.ARModule.dll", "UnityEngine.AccessibilityModule.dll", "UnityEngine.AndroidJNIModule.dll",
+            "UnityEngine.AnimationModule.dll", "UnityEngine.AssetBundleModule.dll", "UnityEngine.AudioModule.dll",
+            "UnityEngine.ClothModule.dll", "UnityEngine.ClusterInputModule.dll", "UnityEngine.ClusterRendererModule.dll",
+            "UnityEngine.ContentLoadModule.dll", "UnityEngine.CoreModule.dll", "UnityEngine.CrashReportingModule.dll",
+            "UnityEngine.DSPGraphModule.dll", "UnityEngine.DirectorModule.dll", "UnityEngine.GIModule.dll",
+            "UnityEngine.GameCenterModule.dll", "UnityEngine.GridModule.dll", "UnityEngine.HotReloadModule.dll",
+            "UnityEngine.IMGUIModule.dll", "UnityEngine.ImageConversionModule.dll", "UnityEngine.InputLegacyModule.dll",
+            "UnityEngine.InputModule.dll", "UnityEngine.JSONSerializeModule.dll", "UnityEngine.LocalizationModule.dll",
+            "UnityEngine.NVIDIAModule.dll", "UnityEngine.ParticleSystemModule.dll", "UnityEngine.PerformanceReportingModule.dll",
+            "UnityEngine.Physics2DModule.dll", "UnityEngine.PhysicsModule.dll", "UnityEngine.ProfilerModule.dll",
+            "UnityEngine.PropertiesModule.dll", "UnityEngine.Purchasing.AppleCore.dll", "UnityEngine.Purchasing.AppleMacosStub.dll",
+            "UnityEngine.Purchasing.AppleStub.dll", "UnityEngine.Purchasing.Codeless.dll", "UnityEngine.Purchasing.SecurityCore.dll",
+            "UnityEngine.Purchasing.SecurityStub.dll", "UnityEngine.Purchasing.Stores.dll", "UnityEngine.Purchasing.WinRTCore.dll",
+            "UnityEngine.Purchasing.WinRTStub.dll", "UnityEngine.Purchasing.dll", "UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll",
+            "UnityEngine.ScreenCaptureModule.dll", "UnityEngine.SharedInternalsModule.dll", "UnityEngine.SpriteMaskModule.dll",
+            "UnityEngine.SpriteShapeModule.dll", "UnityEngine.StreamingModule.dll", "UnityEngine.SubstanceModule.dll",
+            "UnityEngine.SubsystemsModule.dll", "UnityEngine.TLSModule.dll", "UnityEngine.TerrainModule.dll",
+            "UnityEngine.TerrainPhysicsModule.dll", "UnityEngine.TextCoreFontEngineModule.dll", "UnityEngine.TextCoreTextEngineModule.dll",
+            "UnityEngine.TextRenderingModule.dll", "UnityEngine.TilemapModule.dll", "UnityEngine.UI.dll",
+            "UnityEngine.UIElementsModule.dll", "UnityEngine.UIModule.dll", "UnityEngine.UmbraModule.dll",
+            "UnityEngine.UnityAnalyticsCommonModule.dll", "UnityEngine.UnityAnalyticsModule.dll", "UnityEngine.UnityConnectModule.dll",
+            "UnityEngine.UnityCurlModule.dll", "UnityEngine.UnityTestProtocolModule.dll", "UnityEngine.UnityWebRequestAssetBundleModule.dll",
+            "UnityEngine.UnityWebRequestAudioModule.dll", "UnityEngine.UnityWebRequestModule.dll", "UnityEngine.UnityWebRequestTextureModule.dll",
+            "UnityEngine.UnityWebRequestWWWModule.dll", "UnityEngine.VFXModule.dll", "UnityEngine.VRModule.dll",
+            "UnityEngine.VehiclesModule.dll", "UnityEngine.VideoModule.dll", "UnityEngine.VirtualTexturingModule.dll",
+            "UnityEngine.WindModule.dll", "UnityEngine.XRModule.dll", "UnityEngine.dll",
+            "Assembly-CSharp.dll", "Assembly-CSharp-firstpass.dll"
+        };
 
-        /// <summary>
-        /// UMM's logger instance. Use this to write logs to the UMM settings
-        /// window under the "Logs" tab.
-        /// </summary>
         public static UnityModManager.ModEntry.ModLogger Logger { get; private set; }
-
         private static Harmony harmony;
 
-        /// <summary>
-        /// Perform any initial setup with the mod here.
-        /// </summary>
-        /// <param name="modEntry">UMM's mod entry for the mod.</param>
         internal static void Setup(UnityModManager.ModEntry modEntry)
         {
             Logger = modEntry.Logger;
-
-            // Add hooks to UMM event methods
             modEntry.OnToggle = OnToggle;
             modEntry.OnGUI = Options.OnGUI;
         }
 
-        /// <summary>
-        /// Handler for toggling the mod on/off.
-        /// </summary>
-        /// <param name="modEntry">UMM's mod entry for the mod.</param>
-        /// <param name="value">
-        /// <c>true</c> if the mod is being toggled on, <c>false</c> if the mod
-        /// is being toggled off.
-        /// </param>
-        /// <returns><c>true</c></returns>
         private static bool OnToggle(UnityModManager.ModEntry modEntry, bool value)
         {
             IsEnabled = value;
-            if (value)
-            {
-                StartMod(modEntry);
-            }
-            else
-            {
-                StopMod(modEntry);
-            }
+            if (value) StartMod(modEntry);
+            else StopMod(modEntry);
             return true;
         }
 
-        /// <summary>
-        /// Start the mod up. You can create Unity GameObjects, patch methods,
-        /// etc.
-        /// </summary>
-        /// <param name="modEntry">UMM's mod entry for the mod.</param>
         private static void StartMod(UnityModManager.ModEntry modEntry)
         {
-            // Patch everything in this assembly
             harmony = new Harmony(modEntry.Info.Id);
             harmony.PatchAll(Assembly.GetExecutingAssembly());
 
-            Assembly.LoadFile(Path.Combine(AssemblyDirectory, "./JSNet.dll"));
+            if (!Directory.Exists(TypingsDir)) Directory.CreateDirectory(TypingsDir);
+            Relief.Modules.EngineManager.GenerateTypeDefinitions(DllDir, Path.Combine(TypingsDir, "unity-engine.d.ts"), DllNames);
             try
             {
-                if (!Directory.Exists(ScriptDir))
-                {
-                    Directory.CreateDirectory(ScriptDir);
-                }
+                if (!Directory.Exists(ScriptDir)) Directory.CreateDirectory(ScriptDir);
 
+                jsConsole = new JsConsole(Logger);
+
+                // Initialize Transform Engine for TS
                 transformEngine = new Engine(options =>
                 {
                     options.EnableModules(ScriptDir);
                     options.ExperimentalFeatures = ExperimentalFeature.All;
                     options.AllowClr();
                 });
-
-                jsConsole = new JsConsole(Logger);
-
                 transformEngine.SetValue("console", jsConsole);
-
                 transformEngine.Execute(Properties.Resources.tsc);
 
                 typeScriptLoader = new TypeScriptModuleLoader(transformEngine, ScriptDir, Logger, new DefaultModuleLoader(ScriptDir));
 
-                engine = new Engine(options =>
-                {
-                    options.EnableModules(ScriptDir);
-                    options.ExperimentalFeatures = ExperimentalFeature.All;
-                    options.AllowClr(typeof(String).Assembly, typeof(BuiltInModules).Assembly);
-                    options.Modules.ModuleLoader = typeScriptLoader;
-                });
-                engine.SetValue("window", engine);
-                engine.SetValue("document", engine);
-                engine.SetValue("self", engine);
-                engine.Execute(Properties.Resources.fetch);
-                engine.Execute(Properties.Resources.base64);
-                engine.Execute(Properties.Resources.abortcontroller);
+                // Initialize Main Engine
+                eventSystem = new EventSystem(null); // Will set engine later
+                engine = EngineManager.CreateEngine(ScriptDir, DllDir, typeScriptLoader, eventSystem, jsConsole, DllNames);
+                
+                // Re-initialize EventSystem with engine for JS callback support
+                var engineField = typeof(EventSystem).GetField("_jsEngine", BindingFlags.NonPublic | BindingFlags.Instance);
+                engineField?.SetValue(eventSystem, engine);
 
+                EngineManager.RegisterModAssembly(engine, modEntry.Assembly);
 
-                eventSystem = new EventSystem(engine);
-
-
-
-
-                // Register All Internal Modules
-                BuiltInModules.RegisterAllModules(engine, eventSystem, ScriptDir);
-
-                // Create a GameObject for ReliefUnityEvents
-                var unityEventsGameObject = new UnityEngine.GameObject("ReliefUnityEvents");
+                // Setup Unity Events GameObject
+                var unityEventsGameObject = new GameObject("ReliefUnityEvents");
                 var reliefUnityEvents = unityEventsGameObject.AddComponent<ReliefUnityEvents>();
                 reliefUnityEvents.EventSystem = eventSystem;
 
-                // Dynamically register UnityEngine types as a module
-                var unityEngineAssembly = typeof(UnityEngine.GameObject).Assembly;
-                engine.Modules.Add("unity-engine", builder =>
-                {
-                    foreach (var type in unityEngineAssembly.GetExportedTypes().Where(t => t.IsPublic && t.Namespace == "UnityEngine"))
-                    {
-                        builder.ExportType(type.Name, type);
-                    }
-
-                    // Explicitly export a factory function for GameObject
-                    builder.ExportFunction("createGameObject", new Func<JsValue[], JsValue>((name) => JsValue.FromObject(engine, new UnityEngine.GameObject(name[0].AsString()))));
+                // Start script scanning thread
+                scriptThread = new Thread(() => {
+                    var scriptManager = new ScriptManager(engine, ScriptDir, typeScriptLoader, eventSystem, Logger);
+                    scriptManager.ScanAndLoad();
                 });
-
-                // Dynamically register TMPro types as a module
-                var tmproAssembly = typeof(TMPro.TextMeshProUGUI).Assembly;
-                engine.Modules.Add("tmpro", builder =>
-                {
-                    foreach (var type in tmproAssembly.GetExportedTypes().Where(t => t.IsPublic && t.Namespace == "TMPro"))
-                    {
-                        builder.ExportType(type.Name, type);
-                    }
-                });
-
-                // Dynamically register mod's types as a module
-                if (modEntry.Assembly != null)
-                {
-                    engine.Modules.Add("mod-assembly", builder =>
-                    {
-                        foreach (var type in modEntry.Assembly.GetExportedTypes().Where(t => t.IsPublic))
-                        {
-                            builder.ExportType(type.FullName, type);
-                        }
-                    });
-                }
-
-                engine.SetValue<JsConsole>("console", jsConsole);
-                engine.SetValue("eventSystem", eventSystem);
+                scriptThread.Start();
             }
             catch (Exception ex)
             {
                 Logger.LogException(ex);
             }
-
-            Mainthread = new Thread(new ThreadStart(ScanModE));
-            Mainthread.Start();
         }
 
-
-
-        private static void ScanModE()
-        {
-            ScanMods(engine);
-        }
-        /// <summary>
-        /// Stop the mod by cleaning up anything that you created in
-        /// <see cref="StartMod(UnityModManager.ModEntry)"/>.
-        /// </summary>
-        /// <param name="modEntry">UMM's mod entry for the mod.</param>
         private static void StopMod(UnityModManager.ModEntry modEntry)
         {
-            // Unpatch everything
-            harmony.UnpatchAll(modEntry.Info.Id);
+            harmony?.UnpatchAll(modEntry.Info.Id);
             engine = null;
         }
-
-        private static void ScanMods(Engine engine)
-        {
-            if (engine == null) { return; }
-
-            foreach (var directory in Directory.GetDirectories(ScriptDir))
-            {
-                string projectJsonPath = Path.Combine(directory, "project.json");
-                if (!File.Exists(projectJsonPath)) continue;
-
-                string projectJsonContent = File.ReadAllText(projectJsonPath);
-                var projectInfo = projectJsonContent.FromJson<ProjectInfo>(); // 修改为TinyJson
-
-                if (string.IsNullOrEmpty(projectInfo.EntryPoint))
-                    continue;
-
-                string entryPointFilePath = Path.Combine(directory, projectInfo.EntryPoint);
-
-                if (!File.Exists(entryPointFilePath)) continue;
-
-                // 构建模块路径
-                string modulePath = Path.Combine(ScriptDir, $"{Path.GetFileName(directory)}/{projectInfo.EntryPoint}");
-
-                if (projectInfo.EntryPoint.EndsWith(".ts") || projectInfo.EntryPoint.EndsWith(".tsx") || projectInfo.EntryPoint.EndsWith(".jsx"))
-                {
-                    // Transform TypeScript/JSX to JavaScript
-                    string tsCode = File.ReadAllText(entryPointFilePath);
-                    var transformResult = typeScriptLoader.TransformTypeScript(tsCode, Path.GetExtension(entryPointFilePath).ToLower(), Path.GetFileName(entryPointFilePath));
-                    var transformedCode = transformResult;
-
-                    // Save transformed code to a .js file
-                    string jsFilePath = Path.ChangeExtension(entryPointFilePath, ".temp.js");
-                    File.WriteAllText(jsFilePath, transformedCode);
-                    modulePath = Path.Combine(ScriptDir, $"{Path.GetFileName(directory)}/{Path.GetFileName(jsFilePath)}");
-                }
-                Logger.Log($"Load Module <color=#debb7b>{projectInfo.Name}</color>");
-                try
-                {
-                    var exports = engine.Modules.Import(modulePath);
-
-                    // 获取导出的函数
-                    var exportFunction = exports.Get("default").AsFunctionInstance();
-
-                    // 调用导出函数
-                    exportFunction.Call(engine.Global, new JsValue[] { projectInfo.Id, projectInfo.Name });
-                    Logger.Log($"Module <color=#debb7b>{projectInfo.Name}</color> Loaded.");
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogException(ex);
-                    Logger.Log($"Failed to Load Module <color=#debb7b>{projectInfo.Name}</color>");
-                }
-
-
-            }
-
-            eventSystem.TriggerEvent("modsLoaded");
-        }
-
-        public class ProjectInfo
-        {
-            public string Name { get; set; }
-            public string Id { get; set; }
-            public object[] Authors { get; set; }
-            public string EntryPoint { get; set; }
-            public string Version { get; set; }
-            public string Description { get; set; }
-            public string Inject { get; set; }
-        }
-
-
-
-
     }
 }
+

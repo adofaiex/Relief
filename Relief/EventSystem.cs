@@ -1,207 +1,307 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 using Jint;
 using Jint.Native;
 using Jint.Native.Function;
 using Jint.Native.Object;
-using System.Linq;
 
 namespace Relief
 {
-    /// <summary>
-    /// 简单事件系统，支持事件注册、移除和触发，参数可正常传递
-    /// </summary>
     public class EventSystem
     {
-        // 事件名 -> 委托列表
-        private readonly Dictionary<string, List<Delegate>> _eventHandlers = new();
         private readonly Engine _jsEngine;
+        private readonly Dictionary<string, List<HandlerEntry>> _eventHandlers = new();
+        private readonly ReaderWriterLockSlim _lock = new(LockRecursionPolicy.NoRecursion);
+
+        private class HandlerEntry
+        {
+            public string Id { get; init; } = Guid.NewGuid().ToString("N");
+            public int Priority { get; init; }
+            public bool Once { get; init; }
+            public Delegate CsHandler { get; init; }
+            public Function JsFunction { get; init; }
+        }
 
         public EventSystem(Engine jsEngine)
         {
             _jsEngine = jsEngine;
         }
 
-        /// <summary>
-        /// 注册事件
-        /// </summary>
-        /// <param name="eventName">事件名</param>
-        /// <param name="handler">事件处理委托</param>
-        /// <returns>是否注册成功</returns>
         public bool RegisterEvent(string eventName, Delegate handler)
         {
-            if (string.IsNullOrEmpty(eventName) || handler == null)
-                return false;
-
-            if (!_eventHandlers.TryGetValue(eventName, out var handlers))
-            {
-                handlers = new List<Delegate>();
-                _eventHandlers[eventName] = handlers;
-            }
-
-            if (!handlers.Contains(handler))
-                handlers.Add(handler);
-
+            if (string.IsNullOrEmpty(eventName) || handler == null) return false;
+            AddHandler(eventName, new HandlerEntry { CsHandler = handler, Priority = 0, Once = false });
             return true;
         }
 
-        /// <summary>
-        /// 移除事件
-        /// </summary>
-        /// <param name="eventName">事件名</param>
-        public void UnregisterEvent(string eventName)
+        public string RegisterEvent(string eventName, Delegate handler, int priority = 0, bool once = false, string id = null)
         {
-            if (string.IsNullOrEmpty(eventName))
-                return;
-
-            _eventHandlers.Remove(eventName);
+            if (string.IsNullOrEmpty(eventName) || handler == null) return null;
+            var entry = new HandlerEntry { CsHandler = handler, Priority = priority, Once = once, Id = id ?? Guid.NewGuid().ToString("N") };
+            AddHandler(eventName, entry);
+            return entry.Id;
         }
 
-        /// <summary>
-        /// 触发事件
-        /// </summary>
-        /// <param name="eventName">事件名</param>
-        /// <param name="args">参数</param>
-        public void TriggerEvent(string eventName, params object[] args)
+        public bool RegisterEvent(string eventName, JsValue callback)
         {
-            if (string.IsNullOrEmpty(eventName))
-                return;
+            if (string.IsNullOrEmpty(eventName)) throw new ArgumentException(nameof(eventName));
+            if (callback == null || callback == JsValue.Undefined || callback == JsValue.Null) throw new ArgumentException(nameof(callback));
+            if (callback is not Function func) throw new ArgumentException(nameof(callback));
+            var entry = new HandlerEntry { JsFunction = func, Priority = 0, Once = false };
+            AddHandler(eventName, entry);
+            return true;
+        }
 
-            if (_eventHandlers.TryGetValue(eventName, out var handlers))
+        public string RegisterEvent(string eventName, JsValue callback, int priority = 0, bool once = false, string id = null)
+        {
+            if (string.IsNullOrEmpty(eventName)) throw new ArgumentException(nameof(eventName));
+            if (callback == null || callback == JsValue.Undefined || callback == JsValue.Null) throw new ArgumentException(nameof(callback));
+            if (callback is not Function func) throw new ArgumentException(nameof(callback));
+            var entry = new HandlerEntry { JsFunction = func, Priority = priority, Once = once, Id = id ?? Guid.NewGuid().ToString("N") };
+            AddHandler(eventName, entry);
+            return entry.Id;
+        }
+
+        public void UnregisterEvent(string eventName)
+        {
+            if (string.IsNullOrEmpty(eventName)) return;
+            _lock.EnterWriteLock();
+            try
             {
-                foreach (var handler in handlers)
-                {
-                    try
-                    {
-                        // 如果是 Action<object[]>，直接传递参数数组
-                        if (handler is Action<object[]> arrHandler)
-                        {
-                            arrHandler(args);
-                        }
-                        else
-                        {
-                            handler.DynamicInvoke(args);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"事件 {eventName} 触发异常: {ex}");
-                    }
-                }
+                _eventHandlers.Remove(eventName);
+            }
+            finally
+            {
+                _lock.ExitWriteLock();
             }
         }
 
-        /// <summary>
-        /// 注册 JavaScript 函数作为事件回调
-        /// 支持参数解构：如 function({__result}) {...}
-        /// </summary>
-        public bool RegisterEvent(string eventName, JsValue callback)
+        public bool UnregisterEvent(string eventName, string handlerId)
         {
-            if (string.IsNullOrEmpty(eventName))
-                throw new ArgumentException("Event name cannot be null or empty", nameof(eventName));
+            if (string.IsNullOrEmpty(eventName) || string.IsNullOrEmpty(handlerId)) return false;
+            _lock.EnterWriteLock();
+            try
+            {
+                if (_eventHandlers.TryGetValue(eventName, out var list))
+                {
+                    var removed = list.RemoveAll(h => h.Id == handlerId) > 0;
+                    if (list.Count == 0) _eventHandlers.Remove(eventName);
+                    return removed;
+                }
+                return false;
+            }
+            finally
+            {
+                _lock.ExitWriteLock();
+            }
+        }
 
-            if (callback == null || callback == JsValue.Undefined || callback == JsValue.Null)
-                throw new ArgumentException("Callback cannot be null or undefined", nameof(callback));
-
-            if (!(callback is Function function))
-                throw new ArgumentException("Callback must be a function", nameof(callback));
-
-            var thisArg = function.Engine.Global;
-
-            // 包装器：将所有参数打包为一个对象传递给 JS（支持解构）
-            return RegisterEvent(eventName, new Action<object[]>(args =>
+        public void TriggerEvent(string eventName, params object[] args)
+        {
+            if (string.IsNullOrEmpty(eventName)) return;
+            List<HandlerEntry> snapshot = null;
+            _lock.EnterReadLock();
+            try
+            {
+                if (_eventHandlers.TryGetValue(eventName, out var list))
+                    snapshot = list.OrderByDescending(h => h.Priority).ToList();
+            }
+            finally
+            {
+                _lock.ExitReadLock();
+            }
+            if (snapshot == null || snapshot.Count == 0) return;
+            var toRemove = new List<string>();
+            foreach (var entry in snapshot)
             {
                 try
                 {
-                    JsValue jsArg = JsValue.Undefined;
-
-                    // 如果参数是 Dictionary<string, object>，则转为 JS 对象
-                    if (args != null && args.Length == 1 && args[0] is Dictionary<string, object> dict)
+                    if (entry.CsHandler != null)
                     {
-                        // 用 FromObject 直接转换为 JS 对象
-                        var jsObj = JsValue.FromObject(_jsEngine, dict);
-                        jsArg = jsObj;
+                        if (entry.CsHandler is Action<object[]> arrAction)
+                        {
+                            arrAction(args);
+                        }
+                        else
+                        {
+                            var method = entry.CsHandler.Method;
+                            var parameters = method.GetParameters();
+                            if (parameters.Length == 0)
+                            {
+                                entry.CsHandler.DynamicInvoke();
+                            }
+                            else if (parameters.Length == args.Length)
+                            {
+                                entry.CsHandler.DynamicInvoke(args);
+                            }
+                            else
+                            {
+                                // 尝试匹配参数数量
+                                var newArgs = new object[parameters.Length];
+                                for (int i = 0; i < Math.Min(parameters.Length, args.Length); i++)
+                                {
+                                    newArgs[i] = args[i];
+                                }
+                                entry.CsHandler.DynamicInvoke(newArgs);
+                            }
+                        }
                     }
-                    else
+                    else if (entry.JsFunction != null)
                     {
-                        // 否则直接传递参数数组
-                        jsArg = JsValue.FromObject(_jsEngine, args);
+                        var arg = PrepareJsArg(args);
+                        var thisArg = entry.JsFunction.Engine.Global;
+                        entry.JsFunction.Call(thisArg, arg);
                     }
-
-                    function.Call(thisArg, jsArg);
                 }
                 catch (Exception ex)
                 {
                     LogCallbackError(eventName, ex, args);
                 }
-            }));
+                if (entry.Once) toRemove.Add(entry.Id);
+            }
+            if (toRemove.Count > 0)
+            {
+                _lock.EnterWriteLock();
+                try
+                {
+                    if (_eventHandlers.TryGetValue(eventName, out var list))
+                    {
+                        list.RemoveAll(h => toRemove.Contains(h.Id));
+                        if (list.Count == 0) _eventHandlers.Remove(eventName);
+                    }
+                }
+                finally
+                {
+                    _lock.ExitWriteLock();
+                }
+            }
         }
 
-        /// <summary>
-        /// 将 C# 值转换为 JavaScript 值
-        /// </summary>
-        private JsValue ConvertToJsValue(object value, string eventName, int argIndex)
+        public async Task TriggerEventAsync(string eventName, CancellationToken cancellationToken = default, params object[] args)
         {
+            if (string.IsNullOrEmpty(eventName)) return;
+            List<HandlerEntry> snapshot = null;
+            _lock.EnterReadLock();
             try
             {
-                if (value == null)
-                {
-                    return JsValue.Null;
-                }
-
-                // 处理基本类型
-                if (value is int intValue)
-                {
-                    return new JsNumber(intValue);
-                }
-                if (value is double doubleValue)
-                {
-                    return new JsNumber(doubleValue);
-                }
-                if (value is float floatValue)
-                {
-                    return new JsNumber((double)floatValue);
-                }
-                if (value is long longValue)
-                {
-                    return new JsNumber((double)longValue);
-                }
-                if (value is bool boolValue)
-                {
-                    return boolValue ? JsBoolean.True : JsBoolean.False;
-                }
-                if (value is string stringValue)
-                {
-                    return new JsString(stringValue);
-                }
-
-                // 其他类型使用通用转换
-                return JsValue.FromObject(_jsEngine, value);
+                if (_eventHandlers.TryGetValue(eventName, out var list))
+                    snapshot = list.OrderByDescending(h => h.Priority).ToList();
             }
-            catch (Exception ex)
+            finally
             {
-                MainClass.Logger.Error($"Error converting argument {argIndex} for event {eventName}: {ex.Message}");
-                return JsValue.Undefined;
+                _lock.ExitReadLock();
+            }
+            if (snapshot == null || snapshot.Count == 0) return;
+            var toRemove = new List<string>();
+            foreach (var entry in snapshot)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                try
+                {
+                    if (entry.CsHandler != null)
+                    {
+                        if (entry.CsHandler is Func<Task> funcTask)
+                        {
+                            await funcTask().ConfigureAwait(false);
+                        }
+                        else if (entry.CsHandler is Func<object[], Task> funcArgsTask)
+                        {
+                            await funcArgsTask(args).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            var method = entry.CsHandler.Method;
+                            var parameters = method.GetParameters();
+                            if (parameters.Length == 0)
+                            {
+                                entry.CsHandler.DynamicInvoke();
+                            }
+                            else if (parameters.Length == args.Length)
+                            {
+                                entry.CsHandler.DynamicInvoke(args);
+                            }
+                            else
+                            {
+                                // 尝试匹配参数数量
+                                var newArgs = new object[parameters.Length];
+                                for (int i = 0; i < Math.Min(parameters.Length, args.Length); i++)
+                                {
+                                    newArgs[i] = args[i];
+                                }
+                                entry.CsHandler.DynamicInvoke(newArgs);
+                            }
+                        }
+                    }
+                    else if (entry.JsFunction != null)
+                    {
+                        var arg = PrepareJsArg(args);
+                        var thisArg = entry.JsFunction.Engine.Global;
+                        entry.JsFunction.Call(thisArg, arg);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogCallbackError(eventName, ex, args);
+                }
+                if (entry.Once) toRemove.Add(entry.Id);
+            }
+            if (toRemove.Count > 0)
+            {
+                _lock.EnterWriteLock();
+                try
+                {
+                    if (_eventHandlers.TryGetValue(eventName, out var list))
+                    {
+                        list.RemoveAll(h => toRemove.Contains(h.Id));
+                        if (list.Count == 0) _eventHandlers.Remove(eventName);
+                    }
+                }
+                finally
+                {
+                    _lock.ExitWriteLock();
+                }
             }
         }
 
-        /// <summary>
-        /// 记录回调错误信息
-        /// </summary>
+        private JsValue PrepareJsArg(object[] args)
+        {
+            if (args != null && args.Length == 1 && args[0] is Dictionary<string, object> dict)
+                return JsValue.FromObject(_jsEngine, dict);
+            return JsValue.FromObject(_jsEngine, args);
+        }
+
         private void LogCallbackError(string eventName, Exception ex, object[] args)
         {
-            
-            string argsStr = args == null ? "null" : 
-                $"[{string.Join(", ", args.Select(a => a?.ToString() ?? "null"))}]";
+            string argsStr = args == null ? "null" : $"[{string.Join(", ", args.Select(a => a?.ToString() ?? "null"))}]";
             MainClass.Logger.Error($"Arguments: {argsStr}");
-            
             if (ex.InnerException != null)
             {
                 MainClass.Logger.Error($"Inner exception: {ex.InnerException.Message}");
                 MainClass.Logger.Error($"Inner exception stack trace: {ex.InnerException.StackTrace}");
             }
-            
             MainClass.Logger.Error($"Stack trace: {ex.StackTrace}");
+        }
+
+        private void AddHandler(string eventName, HandlerEntry entry)
+        {
+            _lock.EnterWriteLock();
+            try
+            {
+                if (!_eventHandlers.TryGetValue(eventName, out var list))
+                {
+                    list = new List<HandlerEntry>();
+                    _eventHandlers[eventName] = list;
+                }
+                list.Add(entry);
+            }
+            finally
+            {
+                _lock.ExitWriteLock();
+            }
         }
     }
 }
