@@ -25,19 +25,38 @@ namespace Relief.Modules.Internal
 
         public void AddAssembly(Assembly assembly, string ns, string moduleName)
         {
-            var types = assembly.GetExportedTypes()
-                .Where(t => t.IsPublic && t.Namespace == ns && !t.IsNested)
-                .ToList();
-
-            if (!_modules.ContainsKey(moduleName))
-                _modules[moduleName] = new List<Type>();
-
-            foreach (var type in types)
+            try 
             {
-                if (!_modules[moduleName].Contains(type))
+                var types = assembly.GetExportedTypes().Where(t => t.IsPublic && t.Namespace == ns && !t.IsNested);
+                if (!_modules.ContainsKey(moduleName)) _modules[moduleName] = new List<Type>();
+                foreach (var t in types)
                 {
-                    _modules[moduleName].Add(type);
-                    _typeToModule[type] = moduleName;
+                    if (!_typeToModule.ContainsKey(t))
+                    {
+                        _typeToModule[t] = moduleName;
+                        _modules[moduleName].Add(t);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Fallback for assemblies that fail to load types normally
+                try 
+                {
+                    var types = assembly.GetTypes().Where(t => t.IsPublic && t.Namespace == ns && !t.IsNested);
+                    if (!_modules.ContainsKey(moduleName)) _modules[moduleName] = new List<Type>();
+                    foreach (var t in types)
+                    {
+                        if (!_typeToModule.ContainsKey(t))
+                        {
+                            _typeToModule[t] = moduleName;
+                            _modules[moduleName].Add(t);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore if completely fails
                 }
             }
         }
