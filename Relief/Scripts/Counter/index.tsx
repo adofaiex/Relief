@@ -63,6 +63,11 @@ export default function Loader(id: string, name: string): void {
   </canvas>;
 
   canvas.AddComponentJ(new LoaderA());
+  
+  setTimeout(() => {
+    canvas.Destroy();
+    console.log(`Canvas for ${name} destroyed after 2 seconds.`);
+  }, 2000);
 
   console.log(`Module ${name} (ID: ${id}) initialized. Total starts: ${stats.startCount}`);
 }

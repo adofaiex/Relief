@@ -74,6 +74,7 @@ namespace Relief
         }
 
         public void SetActive(bool value) => GameObject.SetActive(value);
+        public void Destroy() => UnityEngine.Object.Destroy(GameObject);
 
         // 允许直接访问底层 GameObject
         public GameObject ToUnityObject() => GameObject;

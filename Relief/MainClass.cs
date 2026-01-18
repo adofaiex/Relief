@@ -199,7 +199,13 @@ declare module 'uitext' {
         setFontStyle(style: number): void;
         setShadowEnabled(enabled: boolean): void;
     };
-}";
+}
+
+declare function setTimeout(callback: () => void, delay: number): number;
+declare function setInterval(callback: () => void, delay: number): number;
+declare function clearTimeout(id: number): void;
+declare function clearInterval(id: number): void;
+";
                 File.WriteAllText(builtinPath, builtinContent);
             }
         }

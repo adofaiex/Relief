@@ -23,6 +23,7 @@ namespace Relief.Modules.BuiltInModules
         /// <param name="scriptDir">脚本目录路径</param>
         public static void RegisterAllModules(Engine engine, EventSystem eventSystem, string scriptDir)
         {
+            TimerModule.Register(engine);
             FsModule.Register(engine, scriptDir);
             PathModule.Register(engine);
             ProcessModule.Register(engine);
