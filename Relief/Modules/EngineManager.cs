@@ -113,6 +113,12 @@ namespace Relief.Modules
                 var sub = ns.Substring("UnityEngine.".Length);
                 return $"unity-engine/{FormatSubNamespace(sub)}";
             }
+            if (ns == "Unity") return "unity-engine";
+            if (ns.StartsWith("Unity."))
+            {
+                var sub = ns.Substring("Unity.".Length);
+                return $"unity-engine/{FormatSubNamespace(sub)}";
+            }
             if (ns == "TMPro") return "tmpro";
 
             // Generic handling for other namespaces
