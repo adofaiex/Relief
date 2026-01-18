@@ -234,7 +234,10 @@ namespace Relief.Modules.Internal
                 if (type.BaseType != null && type.BaseType != typeof(object) && type.BaseType != typeof(ValueType) && type.BaseType != typeof(MulticastDelegate))
                 {
                     string mappedBase = MapType(type.BaseType, currentModule);
-                    if (mappedBase != "any")
+                    // Fix: Class cannot extend itself, a generic parameter (T), an array (T[]), or a primitive
+                    bool isGenericParam = type.IsGenericTypeDefinition && type.GetGenericArguments().Any(a => a.Name == mappedBase || mappedBase == $"{a.Name}[]");
+                    if (mappedBase != typeName && !mappedBase.Contains("[]") && !isGenericParam && 
+                        mappedBase != "any" && mappedBase != "number" && mappedBase != "boolean" && mappedBase != "string")
                     {
                         extends = $" extends {mappedBase}";
                     }

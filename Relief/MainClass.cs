@@ -100,6 +100,8 @@ namespace Relief
 
             if (!Directory.Exists(TypingsDir)) Directory.CreateDirectory(TypingsDir);
             Relief.Modules.EngineManager.GenerateTypeDefinitions(DllDir, Path.Combine(TypingsDir, "unity-engine.d.ts"), DllNames);
+            GenerateReactTypings(TypingsDir);
+
             try
             {
                 if (!Directory.Exists(ScriptDir)) Directory.CreateDirectory(ScriptDir);
@@ -144,6 +146,31 @@ namespace Relief
             {
                 Logger.LogException(ex);
             }
+        }
+
+        private static void GenerateReactTypings(string typingsDir)
+        {
+            string reactPath = Path.Combine(typingsDir, "react.d.ts");
+            string jsxRuntimePath = Path.Combine(typingsDir, "react-jsx-runtime.d.ts");
+
+            string reactContent = @"declare module 'react' {
+    export function createElement(type: any, props?: any, ...children: any[]): any;
+}";
+            string jsxRuntimeContent = @"declare module 'react/jsx-runtime' {
+    export function jsx(type: any, props: any, key?: any): any;
+    export function jsxs(type: any, props: any, key?: any): any;
+
+    export namespace JSX {
+        interface IntrinsicElements {
+            [elemName: string]: any;
+        }
+        interface Element {
+            [key: string]: any;
+        }
+    }
+}";
+            File.WriteAllText(reactPath, reactContent);
+            File.WriteAllText(jsxRuntimePath, jsxRuntimeContent);
         }
 
         private static void StopMod(UnityModManager.ModEntry modEntry)
