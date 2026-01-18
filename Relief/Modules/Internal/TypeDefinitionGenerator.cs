@@ -96,15 +96,13 @@ namespace Relief.Modules.Internal
 
                 foreach (var type in sortedTypes)
                 {
-                    if (type.Name.Contains("<") || type.Name.Contains("$") || type.Name.Contains("`") && !type.IsGenericType) continue;
+                    if (type.Name.Contains("<") || type.Name.Contains("$") || type.Name.Contains("`"))
+                    {
+                        if (!type.IsGenericType) continue;
+                    }
                     if (type.GetCustomAttributes(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false).Any()) continue;
 
-                    string typeName = GetSafeTypeName(type);
-                    if (type.IsGenericType)
-                    {
-                        typeName += "_" + type.GetGenericArguments().Length;
-                    }
-
+                    string typeName = GetSafeTypeNameLeaf(type);
                     if (!exportedNames.Add(typeName)) continue;
 
                     try {
@@ -426,7 +424,8 @@ namespace Relief.Modules.Internal
             if (type == typeof(bool)) return "boolean";
             if (type == typeof(int) || type == typeof(float) || type == typeof(double) || 
                 type == typeof(long) || type == typeof(short) || type == typeof(byte) ||
-                type == typeof(decimal) || type == typeof(uint) || type == typeof(ulong)) return "number";
+                type == typeof(decimal) || type == typeof(uint) || type == typeof(ulong) ||
+                type == typeof(IntPtr) || type == typeof(UIntPtr)) return "number";
             if (type == typeof(string) || type == typeof(char)) return "string";
             if (type == typeof(object)) return "any";
             if (type.IsArray) return $"{MapType(type.GetElementType(), currentModule)}[]";
