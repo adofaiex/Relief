@@ -99,7 +99,13 @@ namespace Relief
             harmony.PatchAll(Assembly.GetExecutingAssembly());
 
             if (!Directory.Exists(TypingsDir)) Directory.CreateDirectory(TypingsDir);
-            Relief.Modules.EngineManager.GenerateTypeDefinitions(DllDir, Path.Combine(TypingsDir, "unity-engine.d.ts"), DllNames);
+            
+            string unityEngineDtsPath = Path.Combine(TypingsDir, "unity-engine.d.ts");
+            if (!File.Exists(unityEngineDtsPath))
+            {
+                Relief.Modules.EngineManager.GenerateTypeDefinitions(DllDir, unityEngineDtsPath, DllNames);
+            }
+            
             GenerateReactTypings(TypingsDir);
 
             try
@@ -153,10 +159,17 @@ namespace Relief
             string reactPath = Path.Combine(typingsDir, "react.d.ts");
             string jsxRuntimePath = Path.Combine(typingsDir, "react-jsx-runtime.d.ts");
 
-            string reactContent = @"declare module 'react' {
+            if (!File.Exists(reactPath))
+            {
+                string reactContent = @"declare module 'react' {
     export function createElement(type: any, props?: any, ...children: any[]): any;
 }";
-            string jsxRuntimeContent = @"declare module 'react/jsx-runtime' {
+                File.WriteAllText(reactPath, reactContent);
+            }
+
+            if (!File.Exists(jsxRuntimePath))
+            {
+                string jsxRuntimeContent = @"declare module 'react/jsx-runtime' {
     export function jsx(type: any, props: any, key?: any): any;
     export function jsxs(type: any, props: any, key?: any): any;
 
@@ -169,8 +182,8 @@ namespace Relief
         }
     }
 }";
-            File.WriteAllText(reactPath, reactContent);
-            File.WriteAllText(jsxRuntimePath, jsxRuntimeContent);
+                File.WriteAllText(jsxRuntimePath, jsxRuntimeContent);
+            }
         }
 
         private static void StopMod(UnityModManager.ModEntry modEntry)
