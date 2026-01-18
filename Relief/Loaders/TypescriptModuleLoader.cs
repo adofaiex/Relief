@@ -67,20 +67,40 @@ namespace Relief
             catch (Exception ex)
             {
                 _logger?.LogException(ex);
-                throw new InvalidOperationException($"Failed to load module {resolved.Specifier}: {ex.Message}", ex);
+                throw new InvalidOperationException($"Failed to load module {resolved.Uri}: {ex.Message}", ex);
             }
         }
 
         private string GetNormalizedPath(ResolvedSpecifier resolved)
         {
+            if (resolved.Uri == null) return null;
+
             // 处理URI转换为本地路径，避免相对URI问题
             if (resolved.Uri.IsAbsoluteUri)
             {
-                return resolved.Uri.LocalPath;
+                if (resolved.Uri.Scheme == Uri.UriSchemeFile)
+                {
+                    return resolved.Uri.LocalPath;
+                }
+                return null;
             }
 
             // 相对URI则结合基础目录转换为绝对路径
-            return Path.GetFullPath(Path.Combine(_baseDirectory, resolved.Uri.OriginalString));
+            // 只有当看起来像路径时才处理，否则可能是内部模块名
+            var specifier = resolved.Uri.OriginalString;
+            if (specifier.StartsWith(".") || specifier.Contains("/") || specifier.Contains("\\"))
+            {
+                try
+                {
+                    return Path.GetFullPath(Path.Combine(_baseDirectory, specifier));
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            return null;
         }
 
         public string TransformTypeScript(string sourceCode, string extension, string fileName)
