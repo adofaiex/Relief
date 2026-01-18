@@ -25,8 +25,9 @@ namespace Relief.Modules
 
             foreach (var assembly in assemblies)
             {
-                var namespaces = assembly.GetExportedTypes()
-                    .Where(t => t.IsPublic && !string.IsNullOrEmpty(t.Namespace))
+                var exportedTypes = GetSafeExportedTypes(assembly);
+                var namespaces = exportedTypes
+                    .Where(t => !string.IsNullOrEmpty(t.Namespace))
                     .Select(t => t.Namespace)
                     .Distinct();
 
@@ -175,6 +176,24 @@ namespace Relief.Modules
             return engine;
         }
 
+        private static IEnumerable<Type> GetSafeExportedTypes(Assembly assembly)
+        {
+            try
+            {
+                return assembly.GetExportedTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                Relief.MainClass.Logger.Log($"Warning: Some types could not be loaded from assembly {assembly.FullName}: {ex.Message}");
+                return ex.Types.Where(t => t != null && t.IsPublic);
+            }
+            catch (Exception ex)
+            {
+                Relief.MainClass.Logger.Log($"Error getting exported types from assembly {assembly.FullName}: {ex.Message}");
+                return Enumerable.Empty<Type>();
+            }
+        }
+
         private static void RegisterDynamicModules(Engine engine, string dllFolder, IEnumerable<string> dllNames = null)
         {
             var assemblies = LoadAssemblies(dllFolder, dllNames);
@@ -182,8 +201,9 @@ namespace Relief.Modules
 
             foreach (var assembly in assemblies)
             {
-                var typesByNamespace = assembly.GetExportedTypes()
-                    .Where(t => t.IsPublic && !string.IsNullOrEmpty(t.Namespace))
+                var exportedTypes = GetSafeExportedTypes(assembly);
+                var typesByNamespace = exportedTypes
+                    .Where(t => !string.IsNullOrEmpty(t.Namespace))
                     .GroupBy(t => t.Namespace);
 
                 foreach (var group in typesByNamespace)
@@ -207,9 +227,20 @@ namespace Relief.Modules
                 {
                     engine.Modules.Add(module.Key, builder =>
                     {
-                        foreach (var type in module.Value.Distinct())
+                        var exportedNames = new HashSet<string>();
+                        foreach (var type in module.Value)
                         {
-                            builder.ExportType(type.Name, type);
+                            if (exportedNames.Contains(type.Name)) continue;
+                            
+                            try
+                            {
+                                builder.ExportType(type.Name, type);
+                                exportedNames.Add(type.Name);
+                            }
+                            catch (Exception ex)
+                            {
+                                Relief.MainClass.Logger.Log($"Failed to export type {type.FullName} in module {module.Key}: {ex.Message}");
+                            }
                         }
 
                         if (module.Key == "unity-engine")
@@ -218,6 +249,8 @@ namespace Relief.Modules
                                 JsValue.FromObject(engine, new GameObject(args[0].AsString()))));
                         }
                     });
+                    
+                    Relief.MainClass.Logger.Log($"Registered module: {module.Key} with {module.Value.Count} types");
                 }
                 catch (Exception ex)
                 {
