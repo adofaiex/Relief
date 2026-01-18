@@ -36,7 +36,7 @@ export default function Loader(id: string, name: string): void {
 
   // 2. 显示 UI
   const canvas = <canvas
-    components={[UI.CanvasScaler, UI.GraphicRaycaster]}
+    components={[UI.CanvasScaler, UI.GraphicRaycaster,LoaderA]}
     referenceResolution={{ x: 1920, y: 1080 }}
     dontDestoryOnLoad={true}
   >
@@ -62,8 +62,6 @@ export default function Loader(id: string, name: string): void {
     </image>
   </canvas>;
 
-  canvas.AddComponentJ(new LoaderA());
-  
   setTimeout(() => {
     canvas.Destroy();
     console.log(`Canvas for ${name} destroyed after 2 seconds.`);
