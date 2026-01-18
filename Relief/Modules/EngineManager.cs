@@ -133,12 +133,12 @@ namespace Relief.Modules
             if (lastPart.EndsWith("Module")) 
                 lastPart = lastPart.Substring(0, lastPart.Length - "Module".Length);
             
-            if (lastPart.Length > 0)
+            if (lastPart.Length > 0 && !IsAllUpper(lastPart))
                 lastPart = char.ToLower(lastPart[0]) + lastPart.Substring(1);
 
             if (parts.Length > 1)
             {
-                var result = string.Join("/", parts.Take(parts.Length - 1).Select(p => p.ToLower()));
+                var result = string.Join("/", parts.Take(parts.Length - 1).Select(p => IsAllUpper(p) ? p : p.ToLower()));
                 return $"{result}/{lastPart}";
             }
             
@@ -151,11 +151,17 @@ namespace Relief.Modules
             var formattedParts = parts.Select(p => {
                 var s = p;
                 if (s.EndsWith("Module")) s = s.Substring(0, s.Length - "Module".Length);
-                if (s.Length > 0)
+                if (s.Length > 0 && !IsAllUpper(s))
                     s = char.ToLower(s[0]) + s.Substring(1);
                 return s;
             });
             return string.Join("/", formattedParts);
+        }
+
+        private static bool IsAllUpper(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            return s.All(c => !char.IsLower(c));
         }
 
         public static Engine CreateEngine(string scriptDir, string dllFolder, TypeScriptModuleLoader typeScriptLoader, EventSystem eventSystem, JsConsole jsConsole, IEnumerable<string> dllNames = null)
