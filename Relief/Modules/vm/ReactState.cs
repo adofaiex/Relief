@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Jint;
 using Jint.Native;
@@ -6,8 +6,9 @@ using Jint.Native.Function;
 using Jint.Native.Object;
 using Jint.Runtime.Interop;
 using UnityEngine;
+using Relief.Console;
 
-namespace Relief
+namespace Relief.Modules.vm
 {
     /// <summary>
     /// React状态管理系统，处理组件状态和重新渲染
@@ -108,7 +109,7 @@ namespace Relief
                     var newValue = arguments.Length > 0 ? arguments[0] : JsValue.Undefined;
 
                     // 如果新值是函数，则调用它并传入当前值
-                    if (JsConsole.IsFunction(newValue.AsFunctionInstance()) && newValue is JsValue func)
+                    if (newValue is Jint.Native.Function.Function func)
                     {
                         newValue = func.Call(JsValue.Undefined, new[] { componentState.StateHooks[hookIndex].Value });
                     }
@@ -181,7 +182,7 @@ namespace Relief
                 try
                 {
                     var result = effectHook.Effect.Call(JsValue.Undefined);
-                    if (JsConsole.IsFunction(result) && result is JsValue cleanup)
+                    if (result is Jint.Native.Function.Function cleanup)
                     {
                         effectHook.Cleanup = cleanup;
                     }
@@ -272,7 +273,7 @@ namespace Relief
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Error during rerender: {ex.Message}");
+                        MainClass.Logger.Log($"Error in rerender for {componentId}: {ex.Message}");
                     }
                 }
             }

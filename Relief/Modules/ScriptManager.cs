@@ -8,7 +8,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityModManagerNet;
 
-using Relief.Modules.BuiltInModules;
+using Relief.Modules.BuiltIn;
+using Relief.Loaders;
 
 namespace Relief.Modules
 {

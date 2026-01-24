@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using Jint;
 using Jint.Native;
 
-namespace Relief.Modules.BuiltInModules
+namespace Relief.Modules.BuiltIn
 {
     public static class TimerModule
     {
@@ -37,7 +37,7 @@ namespace Relief.Modules.BuiltInModules
                     catch (TaskCanceledException) { }
                     catch (Exception ex)
                     {
-                        UnityEngine.Debug.LogError($"Error in setTimeout: {ex}");
+                        MainClass.Logger.Log($"Error in setTimeout: {ex}");
                     }
                 }, cts.Token);
 
@@ -71,7 +71,7 @@ namespace Relief.Modules.BuiltInModules
                     catch (TaskCanceledException) { }
                     catch (Exception ex)
                     {
-                        UnityEngine.Debug.LogError($"Error in setInterval: {ex}");
+                        MainClass.Logger.Log($"Error in setInterval: {ex}");
                     }
                 }, cts.Token);
 

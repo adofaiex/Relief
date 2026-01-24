@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Xml;
 using Relief.Modules.vm;
 
-namespace Relief
+namespace Relief.Modules
 {
     public class ReactUnity
     {
@@ -34,6 +34,46 @@ namespace Relief
             _engine.SetValue("ReactUnity", this);
         }
 
+        public Root CreateRoot(JsValue container)
+        {
+            try
+            {
+                GameObject containerGo = null;
+                if (container.IsObject())
+                {
+                    var obj = container.AsObject().ToObject();
+                    if (obj is ReliefGameObject reliefGo)
+                    {
+                        containerGo = reliefGo.GameObject;
+                    }
+                    else if (obj is GameObject go)
+                    {
+                        containerGo = go;
+                    }
+                }
+
+                if (containerGo == null)
+                {
+                    throw new ArgumentException("Invalid container. Must be a GameObject or ReliefGameObject.");
+                }
+
+                // 检查是否是 Canvas
+                if (containerGo.GetComponent<Canvas>() == null)
+                {
+                    MainClass.Logger.Log("Warning: createRoot should ideally be called on a Canvas GameObject.");
+                }
+
+                var root = new Root(this, containerGo);
+                _roots[root.RootId] = root;
+                return root;
+            }
+            catch (Exception ex)
+            {
+                MainClass.Logger.Log($"Error in createRoot: {ex.Message}");
+                return null;
+            }
+        }
+
         public void SetStage(JsValue stageElement)
         {
             try
@@ -46,13 +86,13 @@ namespace Relief
                     if (stageGameObject != null)
                     {
                         // Set as main stage
-                        Debug.Log($"Stage set to GameObject: {stageGameObject.name}");
+                        MainClass.Logger.Log($"Stage set to GameObject: {stageGameObject.name}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error setting stage: {ex.Message}");
+                MainClass.Logger.Log($"Error setting stage: {ex.Message}");
             }
         }
 
@@ -78,16 +118,16 @@ namespace Relief
             private readonly string _rootId;
             private VirtualDOM.VNode _currentVTree;
 
+            public string RootId => _rootId;
+
             public Root(ReactUnity reactUnity, GameObject container)
-            {
-                _reactUnity = reactUnity;
+            {            _reactUnity = reactUnity;
                 _container = container;
                 _rootId = Guid.NewGuid().ToString();
             }
 
-            public JsValue render(JsValue element)
-            {
-                try
+            public void render(JsValue element)
+            {                try
                 {
                     // Create new Virtual DOM tree
                     var newVTree = _reactUnity._virtualDOM.CreateVNode(element);
@@ -98,18 +138,28 @@ namespace Relief
                     // Update current tree
                     _currentVTree = newVTree;
 
-                    // Process any pending state updates
-                    _reactUnity._reactState.ProcessRenderQueue();
-
-                    Debug.Log($"Rendered Virtual DOM tree:\n{_reactUnity._virtualDOM.GetVDOMTree(newVTree)}");
-
-                    return JsValue.Undefined;
+                    // 确保容器是激活的
+                    if (!_container.activeSelf)
+                    {
+                        _container.SetActive(true);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error during render: {ex.Message}");
-                    return JsValue.Undefined;
+                    MainClass.Logger.Log($"Error rendering root: {ex.Message}");
                 }
+            }
+
+            public void unmount()
+            {                if (_container != null)
+                {
+                    // 递归销毁所有子物体
+                    foreach (Transform child in _container.transform)
+                    {
+                        UnityEngine.Object.Destroy(child.gameObject);
+                    }
+                }
+                _currentVTree = null;
             }
 
             public string GetRootId() => _rootId;

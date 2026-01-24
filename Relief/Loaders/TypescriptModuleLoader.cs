@@ -7,7 +7,7 @@ using System.IO;
 using System.Text;
 using UnityModManagerNet;
 
-namespace Relief
+namespace Relief.Loaders
 {
     public class TypeScriptModuleLoader : IModuleLoader
     {

@@ -1,4 +1,4 @@
-﻿using Jint.Native;
+using Jint.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,14 +7,14 @@ using System.Text;
 using System.Threading.Tasks;
 using Jint;
 
-namespace Relief
+namespace Relief.Modules
 {
     [JavascriptType]
-    public class HostMethods
+    public class ReliefHostMethods
     {
         private readonly string _scriptDir;
 
-        public HostMethods(string scriptDir)
+        public ReliefHostMethods(string scriptDir)
         {
             _scriptDir = scriptDir;
         }
@@ -24,11 +24,11 @@ namespace Relief
         {
             try
             {
-                return File.ReadAllText(Path.Combine(_scriptDir, filePath), encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
+                return File.ReadAllText(System.IO.Path.Combine(_scriptDir, filePath), encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading file {filePath}: {ex.Message}");
+                MainClass.Logger.Log($"Error reading file {filePath}: {ex.Message}");
                 throw ex;
             }
         }
@@ -37,7 +37,7 @@ namespace Relief
         {
             try
             {
-                string content = File.ReadAllText(Path.Combine(_scriptDir, filePath), encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
+                string content = File.ReadAllText(System.IO.Path.Combine(_scriptDir, filePath), encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
                 callback(null, content);
             }
             catch (Exception ex)
@@ -55,12 +55,12 @@ namespace Relief
         {
             try
             {
-                File.WriteAllText(Path.Combine(_scriptDir, filePath), data, encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
+                File.WriteAllText(System.IO.Path.Combine(_scriptDir, filePath), data, encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error writing file {filePath}: {ex.Message}");
+                MainClass.Logger.Log($"Error writing file {filePath}: {ex.Message}");
                 throw ex;
             }
         }
@@ -69,7 +69,7 @@ namespace Relief
         {
             try
             {
-                File.WriteAllText(Path.Combine(_scriptDir, filePath), data, encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
+                File.WriteAllText(System.IO.Path.Combine(_scriptDir, filePath), data, encoding.ToLower() == "utf8" ? System.Text.Encoding.UTF8 : System.Text.Encoding.GetEncoding(encoding));
                 callback(null);
             }
             catch (Exception ex)
@@ -85,19 +85,19 @@ namespace Relief
 
         public bool existsSync(string filePath)
         {
-            return File.Exists(Path.Combine(_scriptDir, filePath)) || Directory.Exists(Path.Combine(_scriptDir, filePath));
+            return File.Exists(System.IO.Path.Combine(_scriptDir, filePath)) || Directory.Exists(System.IO.Path.Combine(_scriptDir, filePath));
         }
 
         public bool mkdirSync(string dirPath)
         {
             try
             {
-                Directory.CreateDirectory(Path.Combine(_scriptDir, dirPath));
+                Directory.CreateDirectory(System.IO.Path.Combine(_scriptDir, dirPath));
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating directory {dirPath}: {ex.Message}");
+                MainClass.Logger.Log($"Error creating directory {dirPath}: {ex.Message}");
                 return false;
             }
         }
@@ -111,7 +111,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading directory {dirPath}: {ex.Message}");
+                MainClass.Logger.Log($"Error reading directory {dirPath}: {ex.Message}");
                 return JsValue.Undefined;
             }
         }
@@ -125,7 +125,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting file {filePath}: {ex.Message}");
+                MainClass.Logger.Log($"Error deleting file {filePath}: {ex.Message}");
                 return false;
             }
         }
@@ -139,7 +139,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting directory {dirPath}: {ex.Message}");
+                MainClass.Logger.Log($"Error deleting directory {dirPath}: {ex.Message}");
                 return false;
             }
         }
@@ -152,7 +152,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error joining paths: {ex.Message}");
+                MainClass.Logger.Log($"Error joining paths: {ex.Message}");
                 return null;
             }
         }
@@ -165,7 +165,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error resolving paths: {ex.Message}");
+                MainClass.Logger.Log($"Error resolving paths: {ex.Message}");
                 return null;
             }
         }
@@ -178,7 +178,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting basename: {ex.Message}");
+                MainClass.Logger.Log($"Error getting basename: {ex.Message}");
                 return null;
             }
         }
@@ -191,7 +191,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting dirname: {ex.Message}");
+                MainClass.Logger.Log($"Error getting dirname: {ex.Message}");
                 return null;
             }
         }
@@ -204,7 +204,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting extname: {ex.Message}");
+                MainClass.Logger.Log($"Error getting extname: {ex.Message}");
                 return null;
             }
         }
@@ -217,7 +217,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error checking if path is absolute: {ex.Message}");
+                MainClass.Logger.Log($"Error checking if path is absolute: {ex.Message}");
                 return false;
             }
         }
@@ -260,3 +260,4 @@ namespace Relief
         }
     }
 }
+

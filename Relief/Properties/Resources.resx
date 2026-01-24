@@ -127,15 +127,6 @@
   <data name="fetch" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\polyfill\fetch.js;System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089;gb2312</value>
   </data>
-  <data name="react" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\Resources\react.js;System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089;gb2312</value>
-  </data>
-  <data name="reactComponents" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\Resources\reactComponents.js;System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089;utf-8</value>
-  </data>
-  <data name="react_unity" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>..\Resources\react-unity.js;System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089;utf-8</value>
-  </data>
   <data name="tsc" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\tsc.txt;System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089;gb2312</value>
   </data>

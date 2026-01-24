@@ -2,7 +2,7 @@ using Jint;
 using Jint.Native;
 using Relief.Modules.Internal;
 
-namespace Relief
+namespace Relief.Modules
 {
     public static class PathModule
     {

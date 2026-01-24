@@ -1,14 +1,16 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using Jint;
 using Jint.Native;
 using System.Linq;
 using Jint.Native.Array;
 using Jint.Native.Object;
 using TMPro;
+using Relief.Modules.BuiltInModules;
 
-namespace Relief
+namespace Relief.Modules
 {
     /// <summary>
     /// UnityBridge类用于连接JavaScript和Unity，实现伪React功能
@@ -42,31 +44,41 @@ namespace Relief
             try
             {
                 GameObject gameObject = new GameObject(tag);
-                RegisterGameObject(gameObject);
+                gameObject.SetActive(false); // 默认不显示，直到挂载
+                string id = RegisterGameObject(gameObject);
 
-                // 根据 tag 自动添加常用组件
-                switch (tag.ToLower())
+                // 根据 tag 自动添加常用组件 (支持大写和 PascalCase 内置标签)
+                string tagUpper = tag.ToUpper();
+                switch (tagUpper)
                 {
-                    case "canvas":
+                    case "CANVAS":
                         var canvas = gameObject.AddComponent<Canvas>();
                         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                        gameObject.AddComponent<CanvasScaler>();
+                        gameObject.AddComponent<GraphicRaycaster>();
                         break;
-                    case "image":
+                    case "IMAGE":
                         gameObject.AddComponent<UnityEngine.UI.Image>();
                         break;
-                    case "textmeshpro":
+                    case "TEXT":
+                        gameObject.AddComponent<UnityEngine.UI.Text>();
+                        break;
+                    case "TEXTMESHPRO":
                         gameObject.AddComponent<TextMeshProUGUI>();
                         break;
-                    case "button":
+                    case "BUTTON":
                         gameObject.AddComponent<UnityEngine.UI.Button>();
+                        break;
+                    case "UITEXT":
+                        gameObject.AddComponent<Relief.Modules.BuiltIn.UIText>();
                         break;
                 }
 
-                return new ReliefGameObject(gameObject, engine, this);
+                return new ReliefGameObject(gameObject, id, engine, this);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error creating GameObject: {ex.Message}");
+                MainClass.Logger.Log($"Error creating GameObject: {ex.Message}");
                 return null;
             }
         }
@@ -111,20 +123,11 @@ namespace Relief
         /// <param name="propertyName">属性名称</param>
         /// <param name="propertyValue">属性值</param>
         /// <returns>是否设置成功</returns>
-        public bool SetGameObjectProperty(string gameObjectId, string propertyName, object propertyValue)
+        public bool SetGameObjectProperty(GameObject gameObject, string propertyName, object propertyValue)
         {
             try
             {
-                if (!gameObjectCache.TryGetValue(gameObjectId, out GameObject gameObject))
-                {
-                    var byName = GameObject.Find(gameObjectId);
-                    if (byName == null)
-                    {
-                        Debug.LogError($"GameObject with ID or name {gameObjectId} not found");
-                        return false;
-                    }
-                    gameObject = byName;
-                }
+                if (gameObject == null) return false;
 
                 switch (propertyName.ToLower())
                 {
@@ -282,24 +285,167 @@ namespace Relief
                         }
                         break;
                     default:
-                        // 处理自定义组件属性
-                        SetCustomProperty(gameObject, propertyName, propertyValue);
+                        // 1. 处理自定义组件属性 (如 TextMeshPro 的特殊处理)
+                        if (SetCustomProperty(gameObject, propertyName, propertyValue))
+                        {
+                            break;
+                        }
+                        
+                        // 2. 尝试通过反射映射到 Unity GameObject 或 Transform 属性
+                        SetPropertyViaReflection(gameObject, propertyName, propertyValue);
                         break;
                 }
 
                 return true;
             }
             catch (Exception ex)
-            {
-                Debug.LogError($"Error setting GameObject property: {ex.Message}");
+            { 
+                MainClass.Logger.Log($"Error setting GameObject property: {ex.Message}");
                 return false;
+            }
+        }
+
+        private bool SetPropertyViaReflection(GameObject gameObject, string propertyName, object propertyValue)
+        {
+            try
+            {
+                // 1. 尝试在 GameObject 上找
+                if (TrySetReflection(gameObject, propertyName, propertyValue)) return true;
+
+                // 2. 尝试在 Transform 上找
+                if (TrySetReflection(gameObject.transform, propertyName, propertyValue)) return true;
+
+                // 3. 如果是 RectTransform，尝试在 RectTransform 上找
+                var rectTransform = gameObject.GetComponent<RectTransform>();
+                if (rectTransform != null && TrySetReflection(rectTransform, propertyName, propertyValue)) return true;
+
+                // 4. 尝试在常见组件上找
+                var tmp = gameObject.GetComponent<TMPro.TextMeshProUGUI>();
+                if (tmp != null && TrySetReflection(tmp, propertyName, propertyValue)) return true;
+
+                var image = gameObject.GetComponent<UnityEngine.UI.Image>();
+                if (image != null && TrySetReflection(image, propertyName, propertyValue)) return true;
+
+                var button = gameObject.GetComponent<UnityEngine.UI.Button>();
+                if (button != null && TrySetReflection(button, propertyName, propertyValue)) return true;
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool TrySetReflection(object target, string propertyName, object value)
+        {
+            var type = target.GetType();
+            // 查找属性（不区分大小写）
+            var prop = type.GetProperty(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+            if (prop != null && prop.CanWrite)
+            {
+                try
+                {
+                    var convertedValue = ConvertValue(value, prop.PropertyType);
+                    prop.SetValue(target, convertedValue);
+                    return true;
+                }
+                catch { }
+            }
+
+            // 查找字段（不区分大小写）
+            var field = type.GetField(propertyName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+            if (field != null)
+            {
+                try
+                {
+                    var convertedValue = ConvertValue(value, field.FieldType);
+                    field.SetValue(target, convertedValue);
+                    return true;
+                }
+                catch { }
+            }
+
+            return false;
+        }
+
+        private object ConvertValue(object value, Type targetType)
+        {
+            if (value == null) return null;
+
+            // 如果已经是目标类型，直接返回
+            if (targetType.IsAssignableFrom(value.GetType())) return value;
+
+            if (value is JsValue jsv)
+            {
+                if (jsv.IsNull() || jsv.IsUndefined()) return null;
+
+                if (targetType == typeof(string)) return jsv.ToString();
+                if (targetType == typeof(float)) return (float)jsv.AsNumber();
+                if (targetType == typeof(double)) return jsv.AsNumber();
+                if (targetType == typeof(int)) return (int)jsv.AsNumber();
+                if (targetType == typeof(bool)) return jsv.AsBoolean();
+
+                if (targetType == typeof(Vector2) && jsv.IsObject())
+                {
+                    var v2Obj = jsv.AsObject();
+                    return new Vector2((float)v2Obj.Get("x").AsNumber(), (float)v2Obj.AsObject().Get("y").AsNumber());
+                }
+                if (targetType == typeof(Vector3) && jsv.IsObject())
+                {
+                    var v3Obj = jsv.AsObject();
+                    return new Vector3((float)v3Obj.Get("x").AsNumber(), (float)v3Obj.Get("y").AsNumber(), (float)v3Obj.Get("z").AsNumber());
+                }
+                if (targetType == typeof(Vector4) && jsv.IsObject())
+                {
+                    var v4Obj = jsv.AsObject();
+                    return new Vector4(
+                        (float)(v4Obj.HasProperty("x") ? v4Obj.Get("x").AsNumber() : 0),
+                        (float)(v4Obj.HasProperty("y") ? v4Obj.Get("y").AsNumber() : 0),
+                        (float)(v4Obj.HasProperty("z") ? v4Obj.Get("z").AsNumber() : 0),
+                        (float)(v4Obj.HasProperty("w") ? v4Obj.Get("w").AsNumber() : 0)
+                    );
+                }
+                if (targetType == typeof(Color) && jsv.IsObject())
+                {
+                    var cObj = jsv.AsObject();
+                    return new Color(
+                        (float)(cObj.HasProperty("r") ? cObj.Get("r").AsNumber() : 1),
+                        (float)(cObj.HasProperty("g") ? cObj.Get("g").AsNumber() : 1),
+                        (float)(cObj.HasProperty("b") ? cObj.Get("b").AsNumber() : 1),
+                        (float)(cObj.HasProperty("a") ? cObj.Get("a").AsNumber() : 1)
+                    );
+                }
+
+                if (targetType.IsEnum)
+                {
+                    if (jsv.IsNumber()) return Enum.ToObject(targetType, (int)jsv.AsNumber());
+                    if (jsv.IsString()) return Enum.Parse(targetType, jsv.AsString(), true);
+                }
+
+                var rawObj = jsv.ToObject();
+                if (targetType == typeof(TMP_FontAsset) && rawObj is Font f)
+                {
+                    return ResourceManager.GetOrCreateTMPFont(f);
+                }
+
+                return rawObj;
+            }
+
+            try
+            {
+                return Convert.ChangeType(value, targetType);
+            }
+            catch
+            {
+                return value;
             }
         }
 
         /// <summary>
         /// 设置自定义属性
         /// </summary>
-        private void SetCustomProperty(GameObject gameObject, string propertyName, object propertyValue)
+        private bool SetCustomProperty(GameObject gameObject, string propertyName, object propertyValue)
         {
             // 通用组件列表：props.components = [ Type | string ]
             if (propertyName == "components" && propertyValue is JsValue jsComponents)
@@ -318,7 +464,57 @@ namespace Relief
                 {
                     TryAddComponent(gameObject, jsComponents);
                 }
-                return;
+                return true;
+            }
+
+            // 字体支持
+            if (propertyName == "font" && propertyValue is JsValue jsFont)
+            {
+                if (jsFont.IsString())
+                {
+                    var fontName = jsFont.AsString();
+                    // 优先处理 TextMeshPro
+                    var tmp = gameObject.GetComponent<TextMeshProUGUI>();
+                    if (tmp != null)
+                    {
+                        var fontAsset = Resources.Load<TMP_FontAsset>(fontName) ?? 
+                                        Resources.FindObjectsOfTypeAll<TMP_FontAsset>().FirstOrDefault(f => f.name == fontName);
+                        if (fontAsset != null)
+                        {
+                            tmp.font = fontAsset;
+                            return true;
+                        }
+                    }
+                    // 兼容原生 Text
+                    var text = gameObject.GetComponent<Text>();
+                    if (text != null)
+                    {
+                        var font = Resources.Load<Font>(fontName) ?? 
+                                   Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f => f.name == fontName);
+                        if (font != null)
+                        {
+                            text.font = font;
+                            return true;
+                        }
+                    }
+                }
+                else if (jsFont.IsObject())
+                {
+                    var fontObj = jsFont.ToObject();
+                    var tmp = gameObject.GetComponent<TextMeshProUGUI>();
+                    if (tmp != null)
+                    {
+                        if (fontObj is TMP_FontAsset fa) { tmp.font = fa; }
+                        else if (fontObj is Font f) { tmp.font = ResourceManager.GetOrCreateTMPFont(f); }
+                        
+                        tmp.SetAllDirty();
+                        tmp.ForceMeshUpdate();
+                        return true;
+                    }
+                    
+                    var text = gameObject.GetComponent<Text>();
+                    if (text != null && fontObj is Font standardFont) { text.font = standardFont; return true; }
+                }
             }
 
             // 文本内容：TextMeshProUGUI 或 TextMesh
@@ -329,13 +525,13 @@ namespace Relief
                 if (tmp != null)
                 {
                     tmp.text = value;
-                    return;
+                    return true;
                 }
                 var textMesh = gameObject.GetComponent<TextMesh>();
                 if (textMesh != null)
                 {
                     textMesh.text = value;
-                    return;
+                    return true;
                 }
             }
 
@@ -346,7 +542,7 @@ namespace Relief
                 if (tmp != null)
                 {
                     tmp.fontSize = value;
-                    return;
+                    return true;
                 }
             }
 
@@ -361,7 +557,7 @@ namespace Relief
                         if (Enum.TryParse<TextAlignmentOptions>(jsAlign.AsString(), true, out var result))
                             tmp.alignment = result;
                     }
-                    return;
+                    return true;
                 }
             }
 
@@ -370,30 +566,30 @@ namespace Relief
                 Color color = Color.white;
                 if (jsColor.IsObject())
                 {
-                    var obj = jsColor.AsObject();
+                    var colorObj = jsColor.AsObject();
                     color = new Color(
-                        (float)(obj.HasProperty("r") ? obj.Get("r").AsNumber() : 1),
-                        (float)(obj.HasProperty("g") ? obj.Get("g").AsNumber() : 1),
-                        (float)(obj.HasProperty("b") ? obj.Get("b").AsNumber() : 1),
-                        (float)(obj.HasProperty("a") ? obj.Get("a").AsNumber() : 1)
+                        (float)(colorObj.HasProperty("r") ? colorObj.Get("r").AsNumber() : 1),
+                        (float)(colorObj.HasProperty("g") ? colorObj.Get("g").AsNumber() : 1),
+                        (float)(colorObj.HasProperty("b") ? colorObj.Get("b").AsNumber() : 1),
+                        (float)(colorObj.HasProperty("a") ? colorObj.Get("a").AsNumber() : 1)
                     );
                 }
                 var tmp = gameObject.GetComponent<TextMeshProUGUI>();
-                if (tmp != null) { tmp.color = color; return; }
+                if (tmp != null) { tmp.color = color; return true; }
                 var img = gameObject.GetComponent<UnityEngine.UI.Image>();
-                if (img != null) { img.color = color; return; }
+                if (img != null) { img.color = color; return true; }
             }
 
             // 兼容旧格式：component.xyz
             if (propertyName.Equals("backgroundGradient", StringComparison.OrdinalIgnoreCase) && propertyValue is JsValue jsBg)
             {
                 ApplyBackgroundGradient(gameObject, jsBg);
-                return;
+                return true;
             }
             if (propertyName.Equals("backgroundColor", StringComparison.OrdinalIgnoreCase) && propertyValue is JsValue jsCol)
             {
                 ApplyBackgroundColor(gameObject, jsCol);
-                return;
+                return true;
             }
 
             // 兼容旧格式：component.xyz
@@ -407,13 +603,15 @@ namespace Relief
                     {
                         case "rigidbody":
                             gameObject.AddComponent<Rigidbody>();
-                            break;
+                            return true;
                         case "boxcollider":
                             gameObject.AddComponent<BoxCollider>();
-                            break;
+                            return true;
                     }
                 }
             }
+
+            return false;
         }
 
         private void TryAddComponent(GameObject gameObject, JsValue item)

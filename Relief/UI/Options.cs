@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,7 +7,7 @@ using static UnityModManagerNet.UnityModManager.Param;
 using UnityEngine;
 using UnityModManagerNet;
 
-namespace Relief
+namespace Relief.UI
 {
     public enum ExampleEnum
     {
@@ -37,7 +37,7 @@ namespace Relief
         }
     }
 
-    internal class Options
+    public class Options
     {
         private static Settings _settings;
 

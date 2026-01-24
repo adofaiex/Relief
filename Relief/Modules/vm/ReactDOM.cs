@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Jint;
 using Jint.Native;
@@ -28,7 +28,7 @@ namespace Relief.Modules.vm
 
         private void RegisterMethods()
         {
-            _engine.SetValue("ReactDOM", this);
+            _engine.SetValue("ReactUnity", this);
         }
 
         /// <summary>
@@ -70,7 +70,7 @@ namespace Relief.Modules.vm
                 {
                     if (arguments.Length > 0)
                     {
-                        return root.render(arguments[0]);
+                        root.render(arguments[0]);
                     }
                     return JsValue.Undefined;
                 });
@@ -91,7 +91,7 @@ namespace Relief.Modules.vm
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"Error unmounting root: {ex.Message}");
+                        MainClass.Logger.Log($"Error unmounting root: {ex.Message}");
                         return JsValue.Undefined;
                     }
                 });

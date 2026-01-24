@@ -7,14 +7,13 @@ using Jint.Native.Array;
 using Jint.Native.Object;
 using UnityEngine;
 
-namespace Relief
+namespace Relief.Modules.vm
 {
     /// <summary>
     /// Virtual DOM implementation for React-like reconciliation
     /// </summary>
     public class VirtualDOM
     {
-        private readonly Engine _engine;
         private readonly UnityBridge _unityBridge;
         private readonly Dictionary<string, VNode> _vnodeCache = new Dictionary<string, VNode>();
         private readonly Dictionary<string, GameObject> _gameObjectMap = new Dictionary<string, GameObject>();
@@ -22,7 +21,6 @@ namespace Relief
 
         public VirtualDOM(Engine engine, UnityBridge unityBridge)
         {
-            _engine = engine;
             _unityBridge = unityBridge;
         }
 
@@ -142,9 +140,26 @@ namespace Relief
                     }
                     else if (obj.HasProperty("gameObject"))
                     {
-                        // 遗留格式
+                        // 遗留格式或直接传入的GameObject
                         vnode.Type = "gameObject";
-                        vnode.GameObjectId = obj.Get("gameObject").AsString();
+                        var goVal = obj.Get("gameObject");
+                        if (goVal.IsString())
+                        {
+                            vnode.GameObjectId = goVal.AsString();
+                        }
+                        else if (goVal.IsObject())
+                        {
+                            // 如果是对象，尝试获取其ID或注册它
+                            var rawGo = goVal.ToObject();
+                            if (rawGo is GameObject go)
+                            {
+                                vnode.GameObjectId = _unityBridge.RegisterGameObject(go);
+                            }
+                            else if (rawGo is ReliefGameObject reliefGo)
+                            {
+                                vnode.GameObjectId = reliefGo.Id;
+                            }
+                        }
                     }
 
                     // 获取key
@@ -161,7 +176,7 @@ namespace Relief
                         {
                             if (prop.Key != "children")
                             {
-                                vnode.Props[prop.Key.AsString()] = prop.Value.Value;
+                                vnode.Props[prop.Key.ToString()] = prop.Value.Value;
                             }
                         }
 
@@ -260,7 +275,7 @@ namespace Relief
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error during reconciliation: {ex.Message}");
+                MainClass.Logger.Log($"Error reconciling Virtual DOM: {ex.Message}");
             }
         }
 
@@ -277,7 +292,7 @@ namespace Relief
         /// <summary>
         /// 将虚拟节点挂载到实际DOM
         /// </summary>
-        private void MountVNode(VNode vnode, GameObject container)
+        public void MountVNode(VNode vnode, GameObject container)
         {
             try
             {
@@ -289,7 +304,11 @@ namespace Relief
                 {
                     // 创建文本节点
                     nodeGameObject = new GameObject($"Text: {vnode.TextContent}");
+                    nodeGameObject.SetActive(false); // 初始不激活
                     nodeGameObject.transform.SetParent(container.transform, false);
+                    
+                    // 挂载时激活
+                    nodeGameObject.SetActive(true);
 
                     // 添加TextMesh组件
                     var textMesh = nodeGameObject.GetComponent<TextMesh>();
@@ -314,7 +333,15 @@ namespace Relief
                     Debug.Log($"Mounting component: {vnode.Type}");
 
                     nodeGameObject = new GameObject($"Component: {vnode.Type}");
+                    nodeGameObject.SetActive(false); // 初始不激活
                     nodeGameObject.transform.SetParent(container.transform, false);
+                    
+                    // 默认在挂载时激活，除非 props 显式指定了 active: false
+                    if (!vnode.Props.ContainsKey("active"))
+                    {
+                        nodeGameObject.SetActive(true);
+                    }
+
                     var compId = _unityBridge.RegisterGameObject(nodeGameObject);
                     _objectIdMap[nodeGameObject] = compId;
 
@@ -343,6 +370,12 @@ namespace Relief
                     if (nodeGameObject != null)
                     {
                         nodeGameObject.transform.SetParent(container.transform, false);
+                        
+                        // 默认在挂载时激活，除非 props 显式指定了 active: false
+                        if (!vnode.Props.ContainsKey("active"))
+                        {
+                            nodeGameObject.SetActive(true);
+                        }
 
                         // 应用属性
                         ApplyProps(nodeGameObject, vnode.Props);
@@ -491,18 +524,11 @@ namespace Relief
             {
                 try
                 {
-                    if (_objectIdMap.TryGetValue(gameObject, out var id))
-                    {
-                        _unityBridge.SetGameObjectProperty(id, prop.Key, prop.Value);
-                    }
-                    else
-                    {
-                        _unityBridge.SetGameObjectProperty(gameObject.name, prop.Key, prop.Value);
-                    }
+                    _unityBridge.SetGameObjectProperty(gameObject, prop.Key, prop.Value);
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error applying prop {prop.Key}: {ex.Message}");
+                    MainClass.Logger.Log($"Error applying prop {prop.Key}: {ex.Message}");
                 }
             }
         }
@@ -512,19 +538,12 @@ namespace Relief
         /// </summary>
         private void UpdateProps(GameObject gameObject, Dictionary<string, JsValue> newProps, Dictionary<string, JsValue> oldProps)
         {
-            // 移除新属性中不存在的旧属性
+            // 移除不再存在的属性
             foreach (var oldProp in oldProps)
             {
                 if (!newProps.ContainsKey(oldProp.Key))
                 {
-                    if (_objectIdMap.TryGetValue(gameObject, out var idRemove))
-                    {
-                        _unityBridge.SetGameObjectProperty(idRemove, oldProp.Key, JsValue.Null);
-                    }
-                    else
-                    {
-                        _unityBridge.SetGameObjectProperty(gameObject.name, oldProp.Key, JsValue.Null);
-                    }
+                    _unityBridge.SetGameObjectProperty(gameObject, oldProp.Key, JsValue.Null);
                 }
             }
 
@@ -534,14 +553,7 @@ namespace Relief
                 if (!oldProps.ContainsKey(newProp.Key) ||
                     !AreSameValue(oldProps[newProp.Key], newProp.Value))
                 {
-                    if (_objectIdMap.TryGetValue(gameObject, out var idSet))
-                    {
-                        _unityBridge.SetGameObjectProperty(idSet, newProp.Key, newProp.Value);
-                    }
-                    else
-                    {
-                        _unityBridge.SetGameObjectProperty(gameObject.name, newProp.Key, newProp.Value);
-                    }
+                    _unityBridge.SetGameObjectProperty(gameObject, newProp.Key, newProp.Value);
                 }
             }
         }

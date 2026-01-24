@@ -2,7 +2,7 @@ using UnityEngine;
 using Jint.Native;
 using Jint;
 
-namespace Relief
+namespace Relief.Modules
 {
     public class ReactUnityHost : MonoBehaviour
     {

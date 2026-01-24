@@ -2,6 +2,8 @@ using Jint.Native;
 using System;
 using System.IO;
 using System.Linq;
+using Relief;
+
 namespace Relief.Modules.Internal
 {
     [JavascriptType]
@@ -22,7 +24,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading file {filePath}: {ex.Message}");
+                MainClass.Logger.Log($"Error reading file {filePath}: {ex.Message}");
                 throw ex;
             }
         }
@@ -54,7 +56,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error writing file {filePath}: {ex.Message}");
+                MainClass.Logger.Log($"Error writing file {filePath}: {ex.Message}");
                 throw ex;
             }
         }
@@ -91,7 +93,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating directory {dirPath}: {ex.Message}");
+                MainClass.Logger.Log($"Error creating directory {dirPath}: {ex.Message}");
                 return false;
             }
         }
@@ -105,7 +107,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading directory {dirPath}: {ex.Message}");
+                MainClass.Logger.Log($"Error reading directory {dirPath}: {ex.Message}");
                 return JsValue.Undefined;
             }
         }
@@ -119,7 +121,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting file {filePath}: {ex.Message}");
+                MainClass.Logger.Log($"Error deleting file {filePath}: {ex.Message}");
                 return false;
             }
         }
@@ -133,7 +135,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting directory {dirPath}: {ex.Message}");
+                MainClass.Logger.Log($"Error deleting directory {dirPath}: {ex.Message}");
                 return false;
             }
         }

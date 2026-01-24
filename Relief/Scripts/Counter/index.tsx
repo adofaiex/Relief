@@ -1,20 +1,31 @@
 /// <reference path="../../Typings/unity-engine.d.ts" />
 /// <reference path="../../Typings/react.d.ts" />
 /// <reference path="../../Typings/react-jsx-runtime.d.ts" />
+/// <reference path="../../Typings/react-unity.d.ts" />
+/// <reference path="../../Typings/unity-components.d.ts" />
 /// <reference path="../../Typings/builtin.d.ts" />
 
-import { MonoBehaviour } from 'unity-engine'
+import { MonoBehaviour,Resources } from 'unity-engine'
 import { LoaderA } from './umm.tsx'
 import * as UI from 'unity-engine/ui'
 import * as fs from 'fs'
 import * as path from 'path'
+import { loadFont, loadTMPFont,getOSFont } from 'resource-manager'
+import { instance as uitext } from 'uitext'
+import { createRoot } from 'react-unity'
+import { Canvas, Image, TextMeshPro } from 'react/unityComponents'
 
 export default function Loader(id: string, name: string): void {
+  const baseDir = path.join(path.resolve(`./Mods/Relief/Scripts`),`${id}`);
+  
   // 1. 统计启动次数
-  const statsPath = path.join(`./${name}`, "stats.json");
-  if (!fs.existsSync(`./${name}`)) {
-    fs.mkdirSync(`./${name}`, { recursive: true });
+  const statsPath = path.join(baseDir, "stats.json");
+  if (!fs.existsSync(baseDir)) {
+    fs.mkdirSync(baseDir, { recursive: true });
   }
+
+  const font = getOSFont("Microsoft YaHei UI Light");
+  console.log("Loading font from OS ","Result:", font);
 
   let stats = {
     startCount: 0,
@@ -34,38 +45,37 @@ export default function Loader(id: string, name: string): void {
     console.error("Failed to update start stats:", err);
   }
 
-  // 2. 显示 UI
-  const canvas = <canvas
-    components={[UI.CanvasScaler, UI.GraphicRaycaster,LoaderA]}
+
+  // 3. 使用 ReactUnity 渲染 UI
+  // 首先创建一个基础 Canvas
+  const canvas = <Canvas
+    name="ReliefCounterCanvas"
     referenceResolution={{ x: 1920, y: 1080 }}
-    dontDestoryOnLoad={true}
-  >
-    <image
-      backgroundGradient={{
-        width: 10,
-        height: 3,
-        radius: 0.02,
-        start: { r: 0.2, g: 0.2, b: 0.2, a: 0.8 },
-        end: { r: 0.1, g: 0.1, b: 0.1, a: 0.9 },
-        vertical: true
-      }}
-      anchoredPosition={{ x: 0, y: 400 }}
-      sizeDelta={{ x: 600, y: 200 }}
-    >
-      <textMeshPro
+    dontDestroyOnLoad={true}
+  />;
+  
+  // 设置为激活状态
+  canvas.SetActive(true);
+
+  // 使用 createRoot 挂载 UI
+  const root = createRoot(canvas);
+  
+  root.render(
+    <TextMeshPro
         text={`这是你第 <color=#FFD700>${stats.startCount}</color> 次打开游戏\n<size=24>上次启动: ${new Date(stats.lastStart).toLocaleString()}</size>`}
         fontSize={36}
+        font={font}
         color={{ r: 1, g: 1, b: 1, a: 1 }}
         alignment="Center"
-        anchoredPosition={{ x: 0, y: 0 }}
       />
-    </image>
-  </canvas>;
+  );
 
+  // 5秒后销毁整个 UI
   setTimeout(() => {
+    root.unmount();
     canvas.Destroy();
-    console.log(`Canvas for ${name} destroyed after 2 seconds.`);
-  }, 2000);
+    console.log(`UI for ${name} unmounted and destroyed.`);
+  }, 5000);
 
   console.log(`Module ${name} (ID: ${id}) initialized. Total starts: ${stats.startCount}`);
 }

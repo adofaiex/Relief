@@ -3,6 +3,7 @@ using System.IO;
 using Jint.Native;
 using System.Linq;
 using Jint;
+using Relief;
 
 namespace Relief.Modules.Internal
 {
@@ -18,7 +19,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error joining paths: {ex.Message}");
+                MainClass.Logger.Log($"Error joining paths: {ex.Message}");
                 return null;
             }
         }
@@ -31,7 +32,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error resolving paths: {ex.Message}");
+                MainClass.Logger.Log($"Error resolving paths: {ex.Message}");
                 return null;
             }
         }
@@ -44,7 +45,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting basename: {ex.Message}");
+                MainClass.Logger.Log($"Error getting basename: {ex.Message}");
                 return null;
             }
         }
@@ -57,7 +58,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting dirname: {ex.Message}");
+                MainClass.Logger.Log($"Error getting dirname: {ex.Message}");
                 return null;
             }
         }
@@ -70,7 +71,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting extname: {ex.Message}");
+                MainClass.Logger.Log($"Error getting extname: {ex.Message}");
                 return null;
             }
         }
@@ -83,7 +84,7 @@ namespace Relief.Modules.Internal
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error checking if path is absolute: {ex.Message}");
+                MainClass.Logger.Log($"Error checking if path is absolute: {ex.Message}");
                 return false;
             }
         }

@@ -122,71 +122,6 @@ namespace Relief.Properties {
         }
         
         /// <summary>
-        ///   查找类似 /* esm.sh - react@19.1.1 */
-        ///var x=Object.create;var C=Object.defineProperty;var D=Object.getOwnPropertyDescriptor;var b=Object.getOwnPropertyNames;var k=Object.getPrototypeOf,q=Object.prototype.hasOwnProperty;var S=(e,t)=&gt;()=&gt;(t||e((t={exports:{}}).exports,t),t.exports);var z=(e,t,n,r)=&gt;{if(t&amp;&amp;typeof t==&quot;object&quot;||typeof t==&quot;function&quot;)for(let u of b(t))!q.call(e,u)&amp;&amp;u!==n&amp;&amp;C(e,u,{get:()=&gt;t[u],enumerable:!(r=D(t,u))||r.enumerable});return e};var G=(e,t,n)=&gt;(n=e!=null?x(k(e)):{},z(t||!e||!e.__esModule?C(n,&quot;def [字符串的其余部分被截断]&quot;; 的本地化字符串。
-        /// </summary>
-        internal static string react {
-            get {
-                return ResourceManager.GetString("react", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   查找类似 import * as React from &apos;react&apos;;
-        ///
-        ///const ReactUnity = {
-        ///    // Unity场景根节点
-        ///    _root: null,
-        ///    _container: null,
-        ///    _fiberRoot: null,
-        ///
-        ///    createRoot(container) {
-        ///        if (this._root) {
-        ///            throw new Error(&apos;只能创建一个Root实例&apos;);
-        ///        }
-        ///
-        ///        // 创建根GameObject
-        ///        this._container = new UnityEngine.GameObject(&apos;ReactRoot&apos;);
-        ///        UnityEngine.Object.DontDestroyOnLoad(this._container);
-        ///
-        ///        this._root = {
-        ///            render: (element) =&gt; {
-        ///                this._render(elemen [字符串的其余部分被截断]&quot;; 的本地化字符串。
-        /// </summary>
-        internal static string react_unity {
-            get {
-                return ResourceManager.GetString("react_unity", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   查找类似 const UnityComponents = {
-        ///    // 基础组件工厂
-        ///    createComponent(type, props) {
-        ///        return {
-        ///            $$typeof: Symbol.for(&apos;react.element&apos;),
-        ///            type,
-        ///            props: props || {},
-        ///            key: props?.key || null
-        ///        };
-        ///    },
-        ///
-        ///    // GameObject 基础组件
-        ///    GameObject(props) {
-        ///        const go = new UnityEngine.GameObject(props.name || &apos;GameObject&apos;);
-        ///        
-        ///        // 应用变换
-        ///        if (props.position) {
-        ///            go.transform.position = new UnityEngine.Vector3(
-        ///         [字符串的其余部分被截断]&quot;; 的本地化字符串。
-        /// </summary>
-        internal static string reactComponents {
-            get {
-                return ResourceManager.GetString("reactComponents", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   查找类似 /*! *****************************************************************************
         ///Copyright (c) Microsoft Corporation. All rights reserved.
         ///Licensed under the Apache License, Version 2.0 (the &quot;License&quot;); you may not use
@@ -194,8 +129,7 @@ namespace Relief.Properties {
         ///License at http://www.apache.org/licenses/LICENSE-2.0
         ///
         ///THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-        ///KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
-        ///WA [字符串的其余部分被截断]&quot;; 的本地化字符串。
+        ///KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMP [字符串的其余部分被截断]&quot;; 的本地化字符串。
         /// </summary>
         internal static string tsc {
             get {

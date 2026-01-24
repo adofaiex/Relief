@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace Relief.Modules.BuiltInModules
+namespace Relief.Modules.BuiltIn
 {
     public class ReliefUnityEvents : MonoBehaviour
     {

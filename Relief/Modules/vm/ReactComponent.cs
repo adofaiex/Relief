@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Jint;
@@ -121,7 +121,7 @@ namespace Relief.Modules.vm
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error registering component definition {name}: {ex.Message}");
+                MainClass.Logger.Log($"Error registering component {name}: {ex.Message}");
             }
         }
 

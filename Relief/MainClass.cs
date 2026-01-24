@@ -8,7 +8,10 @@ using Jint;
 using Jint.Runtime.Modules;
 using System.Threading;
 using Relief.Modules;
-using Relief.Modules.BuiltInModules;
+using Relief.Modules.BuiltIn;
+using Relief.Loaders;
+using Relief.Console;
+using Relief.UI;
 
 namespace Relief
 {
@@ -82,7 +85,7 @@ namespace Relief
         {
             Logger = modEntry.Logger;
             modEntry.OnToggle = OnToggle;
-            modEntry.OnGUI = Options.OnGUI;
+            modEntry.OnGUI = Relief.UI.Options.OnGUI;
         }
 
         private static bool OnToggle(UnityModManager.ModEntry modEntry, bool value)
@@ -201,6 +204,19 @@ declare module 'uitext' {
     };
 }
 
+declare module 'resource-manager' {
+    import { Texture2D, Sprite, Font, AssetBundle } from 'unity-engine';
+    import { TMP_FontAsset } from 'tmpro';
+
+    export function loadTexture(path: string): Texture2D;
+    export function loadSprite(path: string): Sprite;
+    export function loadFont(path: string): Font;
+    export function loadTMPFont(path: string): TMP_FontAsset;
+    export function getOSFont(name: string, size?: number): Font;
+    export function createTMPFontFromFont(font: Font): TMP_FontAsset;
+    export function loadAssetBundle(path: string): AssetBundle;
+}
+
 declare function setTimeout(callback: () => void, delay: number): number;
 declare function setInterval(callback: () => void, delay: number): number;
 declare function clearTimeout(id: number): void;
@@ -214,32 +230,134 @@ declare function clearInterval(id: number): void;
         {
             string reactPath = Path.Combine(typingsDir, "react.d.ts");
             string jsxRuntimePath = Path.Combine(typingsDir, "react-jsx-runtime.d.ts");
+            string unityComponentsPath = Path.Combine(typingsDir, "unity-components.d.ts");
+            string reactUnityPath = Path.Combine(typingsDir, "react-unity.d.ts");
 
-            if (!File.Exists(reactPath))
-            {
-                string reactContent = @"declare module 'react' {
+            // 始终生成/更新类型定义
+            string reactContent = @"declare module 'react' {
     export function createElement(type: any, props?: any, ...children: any[]): any;
+    export function useState<T>(initialState: T | (() => T)): [T, (newState: T) => void];
+    export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
 }";
-                File.WriteAllText(reactPath, reactContent);
-            }
+            File.WriteAllText(reactPath, reactContent);
 
-            if (!File.Exists(jsxRuntimePath))
-            {
-                string jsxRuntimeContent = @"declare module 'react/jsx-runtime' {
+            string reactUnityContent = @"declare module 'react-unity' {
+    export interface Root {
+        render(element: any): void;
+        unmount(): void;
+    }
+    export function createRoot(container: any): Root;
+    export function useState<T>(initialState: T | (() => T)): [T, (newState: T) => void];
+    export function useEffect(effect: () => void | (() => void), deps?: any[]): void;
+}";
+            File.WriteAllText(reactUnityPath, reactUnityContent);
+
+            string jsxRuntimeContent = @"/// <reference path=""unity-components.d.ts"" />
+declare module 'react/jsx-runtime' {
     export function jsx(type: any, props: any, key?: any): any;
     export function jsxs(type: any, props: any, key?: any): any;
 
     export namespace JSX {
-        interface IntrinsicElements {
-            [elemName: string]: any;
-        }
         interface Element {
             [key: string]: any;
+            SetActive(value: boolean): void;
+            Destroy(): void;
+        }
+        interface IntrinsicElements extends Relief.JSX.UnityElements {
+            [elemName: string]: any;
         }
     }
 }";
-                File.WriteAllText(jsxRuntimePath, jsxRuntimeContent);
-            }
+            File.WriteAllText(jsxRuntimePath, jsxRuntimeContent);
+
+            string unityComponentsContent = @"/// <reference path=""unity-engine.d.ts"" />
+
+declare module 'react/unityComponents' {
+    export const Canvas: string;
+    export const Image: string;
+    export const Text: string;
+    export const TextMeshPro: string;
+    export const Button: string;
+    export const UIText: string;
+}
+
+declare namespace Relief.JSX {
+    interface UnityElementProps {
+        name?: string;
+        active?: boolean;
+        layer?: number;
+        tag?: string;
+        dontDestroyOnLoad?: boolean;
+        components?: any[];
+        children?: any;
+        
+        // Transform props
+        position?: { x: number, y: number, z: number };
+        localPosition?: { x: number, y: number, z: number };
+        localScale?: { x: number, y: number, z: number };
+        rotation?: { x: number, y: number, z: number, w: number };
+    }
+
+    interface RectTransformProps extends UnityElementProps {
+        anchoredPosition?: { x: number, y: number };
+        sizeDelta?: { x: number, y: number };
+        anchorMin?: { x: number, y: number };
+        anchorMax?: { x: number, y: number };
+        pivot?: { x: number, y: number };
+    }
+
+    interface CanvasProps extends RectTransformProps {
+        renderMode?: number;
+        sortingOrder?: number;
+        referenceResolution?: { x: number, y: number };
+    }
+
+    interface ImageProps extends RectTransformProps {
+        color?: { r: number, g: number, b: number, a: number };
+        sprite?: any;
+        raycastTarget?: boolean;
+    }
+
+    interface TextProps extends RectTransformProps {
+        text?: string;
+        fontSize?: number;
+        font?: string | any;
+        color?: { r: number, g: number, b: number, a: number };
+        alignment?: string | number;
+    }
+
+    interface TextMeshProProps extends RectTransformProps {
+        text?: string;
+        fontSize?: number;
+        font?: string | any;
+        fontSizeMin?: number;
+        fontSizeMax?: number;
+        enableAutoSizing?: boolean;
+        color?: { r: number, g: number, b: number, a: number };
+        alignment?: string | number;
+        fontStyle?: string | number;
+        enableWordWrapping?: boolean;
+        overflowMode?: string | number;
+        margin?: { x: number, y: number, z: number, w: number };
+        characterSpacing?: number;
+        wordSpacing?: number;
+        lineSpacing?: number;
+        paragraphSpacing?: number;
+        richText?: boolean;
+        raycastTarget?: boolean;
+    }
+
+    interface UnityElements {
+        Canvas: CanvasProps;
+        Image: ImageProps;
+        Text: TextProps;
+        TextMeshPro: TextMeshProProps;
+        Button: RectTransformProps;
+        UIText: UnityElementProps;
+    }
+}
+";
+            File.WriteAllText(unityComponentsPath, unityComponentsContent);
         }
 
         private static void StopMod(UnityModManager.ModEntry modEntry)

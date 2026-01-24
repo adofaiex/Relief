@@ -9,8 +9,10 @@ using Jint.Runtime;
 using Jint.Runtime.Interop;
 using UnityEngine;
 using TMPro;
-using Relief.Modules.BuiltInModules;
+using Relief.Modules.BuiltIn;
 using Relief.Modules.Internal;
+using Relief.Loaders;
+using Relief.Console;
 
 namespace Relief.Modules
 {
@@ -170,7 +172,7 @@ namespace Relief.Modules
             {
                 options.EnableModules(scriptDir);
                 options.ExperimentalFeatures = ExperimentalFeature.All;
-                options.AllowClr(typeof(string).Assembly, typeof(Relief.Modules.BuiltInModules.BuiltInModules).Assembly);
+                options.AllowClr(typeof(string).Assembly, typeof(Relief.Modules.BuiltInModuleRegistry).Assembly);
                 options.Modules.ModuleLoader = typeScriptLoader;
             });
 
@@ -186,7 +188,7 @@ namespace Relief.Modules
             engine.Execute(Properties.Resources.abortcontroller);
 
             // Register Built-in Modules
-            Relief.Modules.BuiltInModules.BuiltInModules.RegisterAllModules(engine, eventSystem, scriptDir);
+            Relief.Modules.BuiltInModuleRegistry.RegisterAll(engine, scriptDir, eventSystem, jsConsole);
 
             // Register External Libraries from DLL folder
             RegisterDynamicModules(engine, dllFolder, dllNames);
